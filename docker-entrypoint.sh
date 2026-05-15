@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Divine Agent System - Docker Entrypoint Script
-# Handles container initialization and configuration
+# Handles container initialization and configuration.
+# Refreshed for v2.0.0 (2026-05-14).
 
 set -e
 
@@ -75,15 +76,21 @@ if [ ! -f "/app/config.yaml" ]; then
     cat > /app/config.yaml << 'EOF'
 system:
   name: "Divine Agent System"
-  version: "1.0.0"
+  version: "2.0.0"
+  release_date: "2026-05-14"
   environment: "production"
   debug: false
   log_level: "INFO"
+  python_version: "3.12"
 
 architecture:
   orchestrator:
-    type: "LangGraph"
+    type: "langgraph"
+    version: ">=0.4.0"
     state_machine: true
+  agent_protocol:
+    type: "mcp"
+    version: ">=1.2.0"
 
 departments:
   cloud_mastery:
@@ -126,25 +133,45 @@ health_check() {
     log_success "Health check completed"
 }
 
-# Database initialization (if needed)
+# Database initialization (if needed).
+#
+# NOTE (2.0.0): the agents.database module has not yet landed in the
+# repo. We gate hard on the env flag, and any ImportError is treated
+# as a soft warning so a misconfigured flag never blocks startup.
 init_database() {
     if [ "$DIVINE_AGENT_INIT_DB" = "true" ]; then
-        log "Initializing database..."
-        python -c "from agents.database import init_db; init_db()" || {
-            log_warning "Database initialization failed or not needed"
-        }
-        log_success "Database initialization completed"
+        log "Initializing database (best effort - agents.database may not be present yet)..."
+        python - <<'PY' || log_warning "Database initialization skipped"
+try:
+    from agents.database import init_db  # type: ignore
+    init_db()
+    print("agents.database.init_db() executed")
+except ImportError:
+    print("agents.database is not installed in this build; skipping")
+except Exception as exc:
+    print(f"agents.database.init_db raised: {exc}")
+    raise SystemExit(1)
+PY
+        log_success "Database initialization step completed"
     fi
 }
 
-# Migration function
+# Migration function (same caveat as init_database).
 run_migrations() {
     if [ "$DIVINE_AGENT_RUN_MIGRATIONS" = "true" ]; then
-        log "Running database migrations..."
-        python -c "from agents.database import migrate; migrate()" || {
-            log_warning "Migration failed or not needed"
-        }
-        log_success "Migrations completed"
+        log "Running database migrations (best effort)..."
+        python - <<'PY' || log_warning "Migrations skipped"
+try:
+    from agents.database import migrate  # type: ignore
+    migrate()
+    print("agents.database.migrate() executed")
+except ImportError:
+    print("agents.database is not installed in this build; skipping")
+except Exception as exc:
+    print(f"agents.database.migrate raised: {exc}")
+    raise SystemExit(1)
+PY
+        log_success "Migrations step completed"
     fi
 }
 
@@ -246,14 +273,18 @@ log "Log Level: $DIVINE_AGENT_LOG_LEVEL"
 log "Port: $DIVINE_AGENT_PORT"
 log "Workers: $DIVINE_AGENT_WORKERS"
 
-# Execute the main command
+# Execute the main command. Default is the FastAPI server via uvicorn.
 if [ "$#" -eq 0 ]; then
-    # Default command
-    exec python -m agents
+    # Default command: production ASGI server
+    exec uvicorn orchestrator.main:app \
+         --host 0.0.0.0 \
+         --port "${DIVINE_AGENT_PORT}" \
+         --workers "${DIVINE_AGENT_WORKERS}" \
+         --log-level "$(echo "${DIVINE_AGENT_LOG_LEVEL}" | tr '[:upper:]' '[:lower:]')" &
 else
-    # Custom command
-    exec "$@"
-fi &
+    # Custom command (e.g. `python -m agents.cli info`)
+    exec "$@" &
+fi
 
 # Store the main process PID
 MAIN_PID=$!

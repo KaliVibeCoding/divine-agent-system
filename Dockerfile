@@ -1,187 +1,108 @@
-# Divine Agent System - Supreme Agentic Orchestrator (SAO)
-# Multi-stage Docker build for production deployment
+# syntax=docker/dockerfile:1.7
+# =============================================================================
+# Divine Agent System — Supreme Agentic Orchestrator (SAO)
+# Multi-stage Docker build.  Targets:
+#   base         — common Python 3.12 environment
+#   dependencies — wheels + pip install
+#   development  — adds dev tools + source code, default CMD = uvicorn dev server
+#   production   — minimal runtime, gunicorn/uvicorn workers
+#   testing      — runs pytest
+#   quantum      — production + qiskit-aer (already in requirements, just env var)
+#   final        — alias of production
+#
+# Build:
+#   docker build --target production -t sao:2.0.0 .
+#   docker build --target development -t sao:dev .
+# =============================================================================
 
-# Stage 1: Base Python environment
-FROM python:3.11-slim as base
+ARG PYTHON_VERSION=3.12
 
-# Set environment variables
+# ---------- base ------------------------------------------------------------
+FROM python:${PYTHON_VERSION}-slim-bookworm AS base
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    PYTHONPATH=/app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    git \
-    libpq-dev \
-    libssl-dev \
-    libffi-dev \
-    pkg-config \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        ca-certificates \
+        git \
+        libpq-dev \
+        libssl-dev \
+        libffi-dev \
+        pkg-config \
+        netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN groupadd -r divine && useradd -r -g divine divine
-
-# Set working directory
+RUN groupadd --system divine && useradd --system --gid divine --create-home divine
 WORKDIR /app
 
-# Stage 2: Dependencies installation
-FROM base as dependencies
+# ---------- dependencies ----------------------------------------------------
+FROM base AS dependencies
 
-# Copy requirements first for better caching
 COPY requirements.txt .
+RUN pip install --upgrade pip setuptools wheel \
+ && pip install -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --upgrade pip setuptools wheel && \
-    pip install -r requirements.txt
+# ---------- development -----------------------------------------------------
+FROM dependencies AS development
 
-# Stage 3: Development environment
-FROM dependencies as development
-
-# Install development dependencies
-RUN pip install pytest pytest-asyncio pytest-cov black flake8 mypy isort
-
-# Copy source code
+# Dev tooling already lives in requirements.txt (ruff, black, mypy, pytest…)
 COPY . .
-
-# Change ownership to non-root user
 RUN chown -R divine:divine /app
 
-# Switch to non-root user
 USER divine
-
-# Expose ports
 EXPOSE 8000 8001 8080 9090
 
-# Development command
-CMD ["python", "-m", "agents", "--dev"]
+# Hot-reload dev server (FastAPI surface in orchestrator.main)
+CMD ["uvicorn", "orchestrator.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
-# Stage 4: Production environment
-FROM dependencies as production
+# ---------- production ------------------------------------------------------
+FROM dependencies AS production
 
-# Copy only necessary files
-COPY agents/ ./agents/
-COPY config.yaml .
-COPY setup.py .
-COPY README.md .
+COPY agents/        ./agents/
+COPY orchestrator/  ./orchestrator/
+COPY config/        ./config/
+COPY config.yaml setup.py README.md deploy.py docker-entrypoint.sh ./
 
-# Install the package
-RUN pip install -e .
+RUN chmod +x docker-entrypoint.sh \
+ && pip install -e . \
+ && mkdir -p /app/logs /app/data /app/backups \
+ && chown -R divine:divine /app
 
-# Create necessary directories
-RUN mkdir -p /app/logs /app/data /app/backups
-
-# Change ownership to non-root user
-RUN chown -R divine:divine /app
-
-# Switch to non-root user
 USER divine
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
-# Expose ports
 EXPOSE 8000 8001 8080 9090
 
-# Production command
-CMD ["python", "-m", "agents", "--production"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -fsS http://localhost:8000/health || exit 1
 
-# Stage 5: Testing environment
-FROM development as testing
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["uvicorn", "orchestrator.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
 
-# Copy test files
-COPY tests/ ./tests/
+# ---------- testing ---------------------------------------------------------
+FROM development AS testing
 
-# Run tests
-RUN python -m pytest tests/ -v --cov=agents --cov-report=html
+USER root
+RUN pip install pytest pytest-asyncio pytest-cov
+USER divine
+CMD ["pytest", "-q", "test_system.py"]
 
-# Stage 6: Documentation builder
-FROM dependencies as docs
+# ---------- quantum (real qiskit-aer build) ---------------------------------
+FROM production AS quantum
 
-# Install documentation dependencies
-RUN pip install sphinx sphinx-rtd-theme
-
-# Copy documentation source
-COPY docs/ ./docs/
-COPY README.md .
-
-# Build documentation
-RUN cd docs && make html
-
-# Stage 7: Quantum-enhanced version (experimental)
-FROM production as quantum
-
-# Install quantum computing dependencies
-RUN pip install qiskit qiskit-aer cirq
-
-# Enable quantum features
 ENV DIVINE_AGENT_QUANTUM_ENABLED=true
 
-# Stage 8: Multi-cloud version
-FROM production as multicloud
+# ---------- final default ---------------------------------------------------
+FROM production AS final
 
-# Install cloud provider SDKs
-RUN pip install boto3 azure-storage-blob google-cloud-storage
-
-# Enable multi-cloud features
-ENV DIVINE_AGENT_MULTICLOUD_ENABLED=true
-
-# Stage 9: Monitoring-enhanced version
-FROM production as monitoring
-
-# Install monitoring dependencies
-RUN pip install prometheus-client grafana-api influxdb-client
-
-# Enable advanced monitoring
-ENV DIVINE_AGENT_MONITORING_ENHANCED=true
-
-# Expose additional monitoring ports
-EXPOSE 3000 9090 8086
-
-# Stage 10: Security-hardened version
-FROM production as security
-
-# Install security dependencies
-RUN pip install cryptography PyJWT bcrypt
-
-# Enable security features
-ENV DIVINE_AGENT_SECURITY_HARDENED=true
-
-# Remove unnecessary packages
-RUN apt-get update && apt-get remove -y \
-    build-essential \
-    git \
-    && apt-get autoremove -y \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set strict file permissions
-RUN chmod -R 750 /app
-
-# Default target is production
-FROM production as final
-
-# Labels for metadata
-LABEL maintainer="Divine Agent System Team <contact@divineagentsystem.ai>" \
-      version="1.0.0" \
-      description="Supreme Agentic Orchestrator - Multi-Agent Cloud Mastery System" \
-      org.opencontainers.image.title="Divine Agent System" \
-      org.opencontainers.image.description="Supreme Agentic Orchestrator" \
-      org.opencontainers.image.version="1.0.0" \
-      org.opencontainers.image.vendor="Divine Agent System" \
+LABEL org.opencontainers.image.title="Divine Agent System" \
+      org.opencontainers.image.description="Supreme Agentic Orchestrator (SAO) — 2026 stack" \
+      org.opencontainers.image.version="2.0.0" \
+      org.opencontainers.image.created="2026-05-14" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/divineagentsystem/sao" \
-      org.opencontainers.image.documentation="https://divineagentsystem.readthedocs.io/"
-
-# Final configuration
-VOLUME ["/app/data", "/app/logs", "/app/backups"]
-
-# Entry point script
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["python", "-m", "agents"]
+      org.opencontainers.image.source="https://github.com/KaliVibeCoding/divine-agent-system"

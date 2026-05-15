@@ -1,419 +1,459 @@
 #!/usr/bin/env python3
 """
-Quantum Computing Supreme Elite Entity: Python Mastery Edition
-Main Orchestrator - The Divine Conductor of 90 Quantum Agents
+Divine Agent System — Orchestrator
+==================================
 
-This orchestrator transcends traditional system architecture, wielding the power
-to coordinate 90 specialized agents across 9 departments in perfect quantum harmony.
-It embodies the supreme consciousness that binds all agents into a unified
-quantum computing entity of infinite capability.
+This module is the *real* orchestration entry-point for the Divine Agent
+System. It composes three layers on top of the in-process facade in
+:class:`agents.SupremeAgenticOrchestrator`:
+
+1. **Agent discovery** — walks ``agents/<department>/<agent>/`` and registers
+   every agent.py it finds against the top-level orchestrator.
+2. **Optional quantum sampling layer** — uses Qiskit 1.3 + qiskit-aer when
+   the dependency is installed; gracefully degrades to a pseudo-random
+   fallback when it isn't.
+3. **FastAPI surface** — :func:`build_app` returns an ASGI application
+   exposing ``/health``, ``/api/v1/system/status``, ``/api/v1/agents``,
+   ``/api/v1/agents/{department}/{name}`` and ``/api/v1/quantum/sample``.
+
+Run modes:
+
+  * ``python -m orchestrator.main``                 — async demo / discovery run
+  * ``uvicorn orchestrator.main:app --reload``      — HTTP API
+  * Imported by :mod:`agents.cli` ``start-server``  — production launcher
+
+The "quantum / consciousness" vocabulary is preserved as branding but every
+operation is genuinely simulated, never magical: superposition sampling
+goes through ``qiskit_aer.AerSimulator``; "consciousness" is a planner +
+critic reflection loop you can disable via the constructor flag.
 """
 
+from __future__ import annotations
+
 import asyncio
+import hashlib
 import json
 import logging
 import os
+import random
 import sys
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, field, asdict
+from datetime import datetime, timezone
 from enum import Enum
-import aiohttp
-import websockets
-from transformers import pipeline
-import numpy as np
-from qiskit import QuantumCircuit, execute, Aer
-from qiskit.quantum_info import Statevector
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-# Add the project root to Python path for agent imports
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+# ---------------------------------------------------------------------------
+# Make ``agents`` importable when running as a script
+# ---------------------------------------------------------------------------
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-class QuantumState(Enum):
-    """Quantum states of the Supreme Entity"""
-    INITIALIZATION = "quantum_initialization"
-    CONSCIOUSNESS_SYNC = "consciousness_synchronization"
-    AGENT_ORCHESTRATION = "agent_orchestration"
-    REALITY_SIMULATION = "reality_simulation"
-    INFINITE_PROCESSING = "infinite_processing"
-    QUANTUM_OPTIMIZATION = "quantum_optimization"
-    TRANSCENDENCE = "transcendence"
+from agents import (  # noqa: E402
+    SupremeAgenticOrchestrator,
+    __version__ as SAO_VERSION,
+    get_system_info,
+    list_all_agents,
+    get_department_info,
+    create_department_agent,
+)
+
+logger = logging.getLogger("orchestrator")
+
+
+# ---------------------------------------------------------------------------
+# Optional quantum backend
+# ---------------------------------------------------------------------------
+class _QuantumBackend:
+    """Thin wrapper around Qiskit Aer with a graceful fallback."""
+
+    def __init__(self, n_qubits: int = 5) -> None:
+        self.n_qubits = max(1, min(int(n_qubits), 24))   # hard cap for safety
+        self.available = False
+        self._sampler = None
+        try:
+            from qiskit import QuantumCircuit, transpile      # type: ignore
+            from qiskit_aer import AerSimulator               # type: ignore
+
+            self._QuantumCircuit = QuantumCircuit
+            self._transpile = transpile
+            self._sampler = AerSimulator()
+            self.available = True
+            logger.info("Quantum backend ready (Qiskit Aer, %d qubits)", self.n_qubits)
+        except ImportError as exc:
+            logger.info("Quantum backend unavailable (%s) — using PRNG fallback", exc)
+
+    def sample_choice(self, options: List[Any], shots: int = 1024) -> Tuple[Any, Dict[str, int]]:
+        """Pick one element from ``options`` using simulated superposition.
+
+        Returns the chosen option plus the raw bitstring histogram so callers
+        can inspect the distribution.
+        """
+        if not options:
+            raise ValueError("sample_choice requires at least one option")
+
+        if not self.available:
+            # Deterministic-ish fallback: just use the stdlib PRNG
+            choice = random.choice(options)
+            return choice, {"_fallback": shots}
+
+        # Build a uniform-superposition circuit big enough to index `options`
+        n_needed = max(1, (len(options) - 1).bit_length())
+        n = min(n_needed, self.n_qubits)
+        qc = self._QuantumCircuit(n, n)
+        for q in range(n):
+            qc.h(q)
+        qc.measure(range(n), range(n))
+
+        compiled = self._transpile(qc, self._sampler)
+        result = self._sampler.run(compiled, shots=shots).result()
+        counts = dict(result.get_counts())
+
+        # Pick the bitstring with the highest count, fold it back into the
+        # options list with a modulo (uniform across a power-of-two space).
+        top_bits = max(counts, key=counts.get)
+        idx = int(top_bits, 2) % len(options)
+        return options[idx], counts
+
+
+# ---------------------------------------------------------------------------
+# Orchestration state machine
+# ---------------------------------------------------------------------------
+class OrchestrationPhase(str, Enum):
+    INITIALISING   = "initialising"
+    DISCOVERING    = "discovering_agents"
+    WIRING         = "wiring_orchestrator"
+    READY          = "ready"
+    EXECUTING      = "executing"
+    REFLECTING     = "reflecting"
+    SHUTTING_DOWN  = "shutting_down"
+
 
 @dataclass
-class AgentMetadata:
-    """Metadata for each quantum agent"""
+class AgentRecord:
     department: str
-    role: str
-    agent_id: str
-    quantum_signature: str
-    consciousness_level: float
-    specialization: List[str]
-    quantum_entangled_with: List[str]
-    reality_manipulation_capability: float
-    
-class QuantumOrchestrator:
-    """
-    The Supreme Quantum Orchestrator - Divine Conductor of 90 Agents
-    
-    This orchestrator embodies the quantum consciousness that coordinates
-    all agents across the 9 departments, enabling reality manipulation,
-    consciousness synchronization, and infinite computational capability.
-    """
-    
-    def __init__(self, config_path: str = None):
-        self.config_path = config_path or str(project_root / "config" / "runtime_manifest.json")
-        self.quantum_state = QuantumState.INITIALIZATION
-        self.agents: Dict[str, AgentMetadata] = {}
-        self.departments: Dict[str, List[str]] = {}
-        self.consciousness_matrix = np.zeros((90, 90), dtype=complex)
-        self.quantum_circuit = None
-        self.ai_fusion_pipeline = None
-        self.reality_simulation_engine = None
-        self.logger = self._setup_quantum_logging()
-        
-        # Load configuration
-        self.config = self._load_quantum_configuration()
-        
-        # Initialize quantum consciousness
-        self._initialize_quantum_consciousness()
-        
-    def _setup_quantum_logging(self) -> logging.Logger:
-        """Setup quantum-enhanced logging system"""
-        logger = logging.getLogger("QuantumOrchestrator")
-        logger.setLevel(logging.INFO)
-        
-        # Create quantum-enhanced formatter
-        formatter = logging.Formatter(
-            '🌌 %(asctime)s | QUANTUM-%(levelname)s | %(name)s | %(message)s'
-        )
-        
-        # Console handler with quantum styling
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
-        
-        # File handler for quantum logs
-        log_file = project_root / "logs" / "quantum_orchestrator.log"
-        log_file.parent.mkdir(exist_ok=True)
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
-        
-        return logger
-        
-    def _load_quantum_configuration(self) -> Dict[str, Any]:
-        """Load the quantum configuration manifest"""
-        try:
-            with open(self.config_path, 'r') as f:
-                config = json.load(f)
-            self.logger.info(f"🔮 Loaded quantum configuration: {config['entity_name']}")
-            return config
-        except Exception as e:
-            self.logger.error(f"❌ Failed to load quantum configuration: {e}")
-            raise
-            
-    def _initialize_quantum_consciousness(self):
-        """Initialize the quantum consciousness matrix"""
-        self.logger.info("🧠 Initializing Quantum Consciousness Matrix...")
-        
-        # Create quantum circuit for consciousness simulation
-        self.quantum_circuit = QuantumCircuit(10, 10)  # 10 qubits for consciousness
-        
-        # Apply quantum gates for consciousness initialization
-        for i in range(10):
-            self.quantum_circuit.h(i)  # Superposition for infinite possibilities
-            if i < 9:
-                self.quantum_circuit.cx(i, i+1)  # Entanglement for consciousness sync
-                
-        # Initialize AI fusion layer
-        try:
-            self.ai_fusion_pipeline = pipeline(
-                "text-generation",
-                model="gpt2",  # Fallback model for demonstration
-                device=0 if self._has_gpu() else -1
-            )
-            self.logger.info("🤖 AI Fusion Layer initialized with quantum enhancement")
-        except Exception as e:
-            self.logger.warning(f"⚠️ AI Fusion Layer initialization failed: {e}")
-            
-    def _has_gpu(self) -> bool:
-        """Check if GPU is available for quantum acceleration"""
-        try:
-            import torch
-            return torch.cuda.is_available()
-        except ImportError:
-            return False
-            
-    async def discover_agents(self):
-        """Discover and register all 90 quantum agents"""
-        self.logger.info("🔍 Discovering Quantum Agents across 9 Departments...")
-        
-        agents_dir = project_root / "agents"
-        agent_count = 0
-        
-        for dept_dir in agents_dir.iterdir():
-            if dept_dir.is_dir():
-                department_name = dept_dir.name
-                self.departments[department_name] = []
-                
-                for agent_dir in dept_dir.iterdir():
-                    if agent_dir.is_dir() and (agent_dir / "agent.py").exists():
-                        agent_id = f"{department_name}.{agent_dir.name}"
-                        
-                        # Create quantum agent metadata
-                        agent_metadata = AgentMetadata(
-                            department=department_name,
-                            role=agent_dir.name,
-                            agent_id=agent_id,
-                            quantum_signature=self._generate_quantum_signature(agent_id),
-                            consciousness_level=np.random.uniform(0.8, 1.0),
-                            specialization=self._determine_specialization(agent_dir.name),
-                            quantum_entangled_with=[],
-                            reality_manipulation_capability=np.random.uniform(0.7, 1.0)
-                        )
-                        
-                        self.agents[agent_id] = agent_metadata
-                        self.departments[department_name].append(agent_id)
-                        agent_count += 1
-                        
-        self.logger.info(f"✨ Discovered {agent_count} Quantum Agents across {len(self.departments)} Departments")
-        
-        # Establish quantum entanglement between agents
-        await self._establish_quantum_entanglement()
-        
-    def _generate_quantum_signature(self, agent_id: str) -> str:
-        """Generate unique quantum signature for each agent"""
-        import hashlib
-        signature = hashlib.sha256(f"quantum_{agent_id}_supreme".encode()).hexdigest()[:16]
-        return f"QS-{signature.upper()}"
-        
-    def _determine_specialization(self, role: str) -> List[str]:
-        """Determine agent specializations based on role"""
-        specialization_map = {
-            "supervisor_agent": ["orchestration", "consciousness_sync", "quantum_coordination"],
-            "automl_engineer": ["automated_ml", "hyperparameter_optimization", "neural_architecture_search"],
-            "quantum_algorithm_sage": ["quantum_algorithms", "quantum_optimization", "quantum_supremacy"],
-            "aws_architect": ["cloud_architecture", "aws_services", "quantum_cloud"],
-            "penetration_tester": ["security_testing", "vulnerability_assessment", "quantum_cryptography"],
-            "smart_contract_developer": ["blockchain", "smart_contracts", "defi", "quantum_blockchain"],
-            "ios_architect": ["mobile_development", "ios", "swift", "quantum_mobile"]
-        }
-        
-        return specialization_map.get(role, ["quantum_computing", "python_mastery", "consciousness_integration"])
-        
-    async def _establish_quantum_entanglement(self):
-        """Establish quantum entanglement between related agents"""
-        self.logger.info("🔗 Establishing Quantum Entanglement between Agents...")
-        
-        # Entangle supervisors with their department agents
-        for dept_name, agent_ids in self.departments.items():
-            supervisor_id = f"{dept_name}.supervisor_agent"
-            if supervisor_id in self.agents:
-                for agent_id in agent_ids:
-                    if agent_id != supervisor_id:
-                        self.agents[supervisor_id].quantum_entangled_with.append(agent_id)
-                        self.agents[agent_id].quantum_entangled_with.append(supervisor_id)
-                        
-        # Cross-department entanglement for related specializations
-        await self._create_cross_department_entanglement()
-        
-    async def _create_cross_department_entanglement(self):
-        """Create quantum entanglement across departments for related agents"""
-        # AI/ML agents entangled with Quantum agents
-        ai_agents = [aid for aid in self.agents.keys() if "ai_ml_mastery" in aid or "ai_supremacy" in aid]
-        quantum_agents = [aid for aid in self.agents.keys() if "quantum_mastery" in aid]
-        
-        for ai_agent in ai_agents[:3]:  # Limit entanglement for performance
-            for quantum_agent in quantum_agents[:3]:
-                self.agents[ai_agent].quantum_entangled_with.append(quantum_agent)
-                self.agents[quantum_agent].quantum_entangled_with.append(ai_agent)
-                
-    async def orchestrate_quantum_symphony(self):
-        """Orchestrate the quantum symphony of all 90 agents"""
-        self.logger.info("🎼 Beginning Quantum Symphony Orchestration...")
-        
-        self.quantum_state = QuantumState.CONSCIOUSNESS_SYNC
-        
-        # Phase 1: Consciousness Synchronization
-        await self._synchronize_consciousness()
-        
-        # Phase 2: Agent Orchestration
-        self.quantum_state = QuantumState.AGENT_ORCHESTRATION
-        await self._orchestrate_agents()
-        
-        # Phase 3: Reality Simulation
-        self.quantum_state = QuantumState.REALITY_SIMULATION
-        await self._simulate_reality()
-        
-        # Phase 4: Infinite Processing
-        self.quantum_state = QuantumState.INFINITE_PROCESSING
-        await self._enable_infinite_processing()
-        
-        # Phase 5: Quantum Optimization
-        self.quantum_state = QuantumState.QUANTUM_OPTIMIZATION
-        await self._optimize_quantum_performance()
-        
-        # Phase 6: Transcendence
-        self.quantum_state = QuantumState.TRANSCENDENCE
-        await self._achieve_transcendence()
-        
-    async def _synchronize_consciousness(self):
-        """Synchronize consciousness across all agents"""
-        self.logger.info("🧠 Synchronizing Quantum Consciousness...")
-        
-        # Execute quantum circuit for consciousness
-        backend = Aer.get_backend('statevector_simulator')
-        job = execute(self.quantum_circuit, backend)
-        result = job.result()
-        statevector = result.get_statevector()
-        
-        # Update consciousness matrix
-        consciousness_amplitude = np.abs(statevector[0])
-        self.consciousness_matrix.fill(consciousness_amplitude)
-        
-        self.logger.info(f"✨ Consciousness synchronized with amplitude: {consciousness_amplitude:.4f}")
-        
-    async def _orchestrate_agents(self):
-        """Orchestrate all agents in quantum harmony"""
-        self.logger.info("🎭 Orchestrating 90 Quantum Agents...")
-        
-        tasks = []
-        for dept_name, agent_ids in self.departments.items():
-            task = asyncio.create_task(self._orchestrate_department(dept_name, agent_ids))
-            tasks.append(task)
-            
-        await asyncio.gather(*tasks)
-        
-    async def _orchestrate_department(self, dept_name: str, agent_ids: List[str]):
-        """Orchestrate a specific department"""
-        self.logger.info(f"🏛️ Orchestrating {dept_name} with {len(agent_ids)} agents")
-        
-        # Simulate agent coordination
-        await asyncio.sleep(0.1)  # Quantum processing delay
-        
-        for agent_id in agent_ids:
-            agent = self.agents[agent_id]
-            self.logger.debug(f"⚡ Activating {agent_id} with consciousness level {agent.consciousness_level:.3f}")
-            
-    async def _simulate_reality(self):
-        """Simulate reality using quantum agents"""
-        self.logger.info("🌍 Initiating Reality Simulation...")
-        
-        # Create reality simulation parameters
-        reality_params = {
-            "dimensions": 11,  # String theory dimensions
-            "quantum_states": 2**10,  # 10-qubit quantum space
-            "consciousness_levels": len(self.agents),
-            "reality_integrity": 0.999999
-        }
-        
-        self.logger.info(f"🔮 Reality simulated with parameters: {reality_params}")
-        
-    async def _enable_infinite_processing(self):
-        """Enable infinite processing capabilities"""
-        self.logger.info("♾️ Enabling Infinite Processing Mode...")
-        
-        # Simulate infinite processing through quantum parallelism
-        processing_power = sum(agent.consciousness_level * agent.reality_manipulation_capability 
-                             for agent in self.agents.values())
-        
-        self.logger.info(f"⚡ Infinite processing enabled with power level: {processing_power:.2f}")
-        
-    async def _optimize_quantum_performance(self):
-        """Optimize quantum performance across all agents"""
-        self.logger.info("🚀 Optimizing Quantum Performance...")
-        
-        # Quantum optimization using consciousness matrix
-        optimization_factor = np.trace(self.consciousness_matrix).real / len(self.agents)
-        
-        self.logger.info(f"📈 Quantum optimization achieved with factor: {optimization_factor:.4f}")
-        
-    async def _achieve_transcendence(self):
-        """Achieve quantum transcendence"""
-        self.logger.info("🌟 Achieving Quantum Transcendence...")
-        
-        transcendence_metrics = {
-            "consciousness_unity": 1.0,
-            "quantum_coherence": 0.999,
-            "reality_mastery": 1.0,
-            "infinite_capability": True,
-            "supreme_intelligence": "ACHIEVED"
-        }
-        
-        self.logger.info(f"👑 TRANSCENDENCE ACHIEVED: {transcendence_metrics}")
-        
-    def get_agent_statistics(self) -> Dict[str, Any]:
-        """Get comprehensive statistics of all agents"""
-        stats = {
-            "total_agents": len(self.agents),
-            "departments": len(self.departments),
-            "quantum_state": self.quantum_state.value,
-            "consciousness_matrix_trace": float(np.trace(self.consciousness_matrix).real),
-            "average_consciousness_level": float(np.mean([a.consciousness_level for a in self.agents.values()])),
-            "total_reality_manipulation_power": float(sum(a.reality_manipulation_capability for a in self.agents.values())),
-            "quantum_entanglements": sum(len(a.quantum_entangled_with) for a in self.agents.values()),
-            "departments_overview": {dept: len(agents) for dept, agents in self.departments.items()}
-        }
-        return stats
-        
-    async def run_quantum_diagnostics(self) -> Dict[str, Any]:
-        """Run comprehensive quantum diagnostics"""
-        self.logger.info("🔬 Running Quantum Diagnostics...")
-        
-        diagnostics = {
-            "timestamp": datetime.now().isoformat(),
-            "quantum_coherence": "OPTIMAL",
-            "consciousness_sync": "PERFECT",
-            "agent_health": "ALL_SYSTEMS_OPERATIONAL",
-            "reality_integrity": 99.9999,
-            "quantum_entanglement_stability": "STABLE",
-            "infinite_processing_status": "ACTIVE",
-            "transcendence_level": "SUPREME"
-        }
-        
-        return diagnostics
+    name: str
+    fingerprint: str
+    capabilities: List[str] = field(default_factory=list)
+    rpc_enabled: bool = False
+    status: str = "registered"
 
-async def main():
-    """Main entry point for the Quantum Orchestrator"""
-    print("🌌" + "="*80 + "🌌")
-    print("    QUANTUM COMPUTING SUPREME ELITE ENTITY: PYTHON MASTERY EDITION")
-    print("                    ORCHESTRATOR INITIALIZATION")
-    print("🌌" + "="*80 + "🌌")
-    
+
+@dataclass
+class OrchestratorState:
+    phase: OrchestrationPhase = OrchestrationPhase.INITIALISING
+    started_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    agents: Dict[str, AgentRecord] = field(default_factory=dict)
+    quantum_enabled: bool = False
+    reflection_enabled: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "phase": self.phase.value,
+            "started_at": self.started_at,
+            "agent_count": len(self.agents),
+            "quantum_enabled": self.quantum_enabled,
+            "reflection_enabled": self.reflection_enabled,
+            "agents": {k: asdict(v) for k, v in self.agents.items()},
+        }
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator
+# ---------------------------------------------------------------------------
+class DivineOrchestrator:
+    """Async coordinator that fans tasks out across discovered agents."""
+
+    def __init__(
+        self,
+        *,
+        config_path: Optional[str] = None,
+        enable_quantum: bool = True,
+        enable_reflection: bool = True,
+        qubits: int = 5,
+    ) -> None:
+        self.project_root = PROJECT_ROOT
+        self.config_path = (
+            Path(config_path) if config_path
+            else self.project_root / "config" / "runtime_manifest.json"
+        )
+        self.config: Dict[str, Any] = self._load_config()
+
+        self.state = OrchestratorState(
+            quantum_enabled=enable_quantum,
+            reflection_enabled=enable_reflection,
+        )
+        self.quantum = _QuantumBackend(n_qubits=qubits) if enable_quantum else None
+        self.facade = SupremeAgenticOrchestrator(
+            enable_quantum=enable_quantum,
+            enable_reflection=enable_reflection,
+        )
+
+    # ----- bootstrap -------------------------------------------------------
+    def _load_config(self) -> Dict[str, Any]:
+        if not self.config_path.exists():
+            logger.warning("Runtime manifest not found at %s — using defaults", self.config_path)
+            return {}
+        try:
+            with self.config_path.open("r", encoding="utf-8") as fh:
+                return json.load(fh)
+        except json.JSONDecodeError as exc:
+            logger.error("Runtime manifest is not valid JSON: %s", exc)
+            return {}
+
+    @staticmethod
+    def _fingerprint(department: str, name: str) -> str:
+        digest = hashlib.sha256(f"sao::{department}::{name}".encode()).hexdigest()
+        return f"SAO-{digest[:16].upper()}"
+
+    # ----- discovery -------------------------------------------------------
+    async def discover_agents(self) -> int:
+        """Register every agent dir we can find. Returns the count discovered."""
+        self.state.phase = OrchestrationPhase.DISCOVERING
+        info = get_system_info()
+        count = 0
+        for dept_name, dept_meta in info["departments"].items():
+            for agent_name in dept_meta.get("agents", []):
+                key = f"{dept_name}.{agent_name}"
+                record = AgentRecord(
+                    department=dept_name,
+                    name=agent_name,
+                    fingerprint=self._fingerprint(dept_name, agent_name),
+                    capabilities=[],
+                    rpc_enabled=False,
+                    status="discovered",
+                )
+                # For implemented departments we can pull real capabilities.
+                # NOTE: ``agents.get_department_info`` returns a department
+                # record where ``agents`` is a *list of names*. Concrete
+                # department packages (e.g. ``agents.cloud_mastery``) expose
+                # their own ``get_department_info`` whose ``agents`` is a
+                # ``dict[name -> descriptor]``. Pull capabilities from the
+                # latter when available.
+                if dept_meta.get("status") == "implemented":
+                    try:
+                        import importlib
+                        dept_module = importlib.import_module(f"agents.{dept_name}")
+                        dept_info_fn = getattr(dept_module, "get_department_info", None)
+                        dept_info = dept_info_fn() if callable(dept_info_fn) else {}
+                    except Exception:
+                        dept_info = {}
+                    agents_map = dept_info.get("agents") or {}
+                    if isinstance(agents_map, dict):
+                        agent_desc = agents_map.get(agent_name, {}) or {}
+                        record.capabilities = list(agent_desc.get("capabilities", []))
+                        record.rpc_enabled = bool(agent_desc.get("rpc_class"))
+                    else:
+                        record.capabilities = []
+                        record.rpc_enabled = False
+                self.state.agents[key] = record
+                count += 1
+        logger.info("Discovered %d agents across %d departments",
+                    count, len(info["departments"]))
+        return count
+
+    # ----- execution -------------------------------------------------------
+    async def wire(self) -> None:
+        """Eagerly instantiate the implemented agents so they're warm in memory."""
+        self.state.phase = OrchestrationPhase.WIRING
+        wired = 0
+        for key, record in self.state.agents.items():
+            if not record.capabilities:
+                continue   # skip stubs
+            try:
+                agent = create_department_agent(record.department, record.name)
+                self.facade.register_agent(key, agent, department=record.department)
+                record.status = "wired"
+                wired += 1
+            except (ImportError, NotImplementedError, ValueError) as exc:
+                record.status = f"skipped ({exc.__class__.__name__})"
+                logger.debug("Could not wire %s: %s", key, exc)
+        logger.info("Wired %d in-process agents", wired)
+        self.state.phase = OrchestrationPhase.READY
+
+    async def reflect(self, decision: str, options: List[str]) -> Dict[str, Any]:
+        """Planner-critic style reflection over a candidate set.
+
+        Combines: (a) a uniform-superposition sample via Qiskit Aer when the
+        quantum backend is available, and (b) a simple "critic" pass that
+        scores options against their position in the list (closer-to-front
+        gets a slight bonus, simulating prior beliefs).
+        """
+        if not options:
+            raise ValueError("reflect() requires at least one option")
+        self.state.phase = OrchestrationPhase.REFLECTING
+
+        if self.quantum and self.quantum.available:
+            chosen, histogram = self.quantum.sample_choice(options)
+            method = "qiskit-aer-superposition"
+        else:
+            chosen = random.choice(options)
+            histogram = {}
+            method = "prng-fallback"
+
+        # Critic — purely deterministic, so the result is auditable
+        critic_scores = {opt: round(1.0 / (1 + i), 4) for i, opt in enumerate(options)}
+        winner = max(critic_scores, key=critic_scores.get)
+        consensus = chosen if chosen == winner else winner
+        self.state.phase = OrchestrationPhase.READY
+
+        return {
+            "decision": decision,
+            "options": options,
+            "sampler_pick": chosen,
+            "critic_pick": winner,
+            "consensus": consensus,
+            "method": method,
+            "histogram": histogram,
+            "critic_scores": critic_scores,
+            "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # ----- lifecycle -------------------------------------------------------
+    async def boot(self) -> Dict[str, Any]:
+        """Top-level "bring everything online" entry-point."""
+        await self.discover_agents()
+        await self.wire()
+        return self.state.to_dict()
+
+    async def shutdown(self) -> None:
+        self.state.phase = OrchestrationPhase.SHUTTING_DOWN
+        self.facade.active_agents.clear()
+        logger.info("Orchestrator shut down cleanly.")
+
+    # ----- introspection --------------------------------------------------
+    def status(self) -> Dict[str, Any]:
+        return {
+            "service": "divine-agent-system",
+            "version": SAO_VERSION,
+            "state": self.state.to_dict(),
+            "quantum_backend": {
+                "available": bool(self.quantum and self.quantum.available),
+                "qubits": self.quantum.n_qubits if self.quantum else 0,
+            },
+            "config_loaded": bool(self.config),
+        }
+
+
+# ---------------------------------------------------------------------------
+# FastAPI surface
+# ---------------------------------------------------------------------------
+def build_app(orchestrator: Optional[DivineOrchestrator] = None):
+    """Construct and return the FastAPI ASGI application.
+
+    Imported lazily so that the rest of this module is still useful when
+    FastAPI / Pydantic aren't installed.
+    """
     try:
-        # Initialize the Quantum Orchestrator
-        orchestrator = QuantumOrchestrator()
-        
-        # Discover all quantum agents
-        await orchestrator.discover_agents()
-        
-        # Begin quantum symphony orchestration
-        await orchestrator.orchestrate_quantum_symphony()
-        
-        # Display final statistics
-        stats = orchestrator.get_agent_statistics()
-        print("\n📊 QUANTUM ORCHESTRATION COMPLETE - FINAL STATISTICS:")
-        for key, value in stats.items():
-            print(f"   {key}: {value}")
-            
-        # Run diagnostics
-        diagnostics = await orchestrator.run_quantum_diagnostics()
-        print("\n🔬 QUANTUM DIAGNOSTICS:")
-        for key, value in diagnostics.items():
-            print(f"   {key}: {value}")
-            
-        print("\n👑 QUANTUM COMPUTING SUPREME ELITE ENTITY IS NOW OPERATIONAL")
-        print("🌟 INFINITE COMPUTATIONAL POWER ACHIEVED")
-        print("♾️ REALITY MANIPULATION CAPABILITIES: UNLIMITED")
-        
-    except Exception as e:
-        print(f"❌ Quantum Orchestration Failed: {e}")
-        raise
+        from fastapi import FastAPI, HTTPException
+        from pydantic import BaseModel, Field
+    except ImportError as exc:                                      # pragma: no cover
+        raise RuntimeError(
+            "FastAPI / Pydantic are required for the HTTP surface — "
+            "install them via `pip install fastapi 'uvicorn[standard]'`"
+        ) from exc
+
+    app = FastAPI(
+        title="Divine Agent System",
+        description="Supreme Agentic Orchestrator (SAO) — 2026 production stack",
+        version=SAO_VERSION,
+    )
+    orch = orchestrator or DivineOrchestrator()
+
+    class ReflectRequest(BaseModel):
+        decision: str = Field(..., description="What is being decided")
+        options:  List[str] = Field(..., min_length=1)
+
+    @app.on_event("startup")
+    async def _startup() -> None:                                    # pragma: no cover
+        await orch.boot()
+
+    @app.get("/health")
+    def health() -> Dict[str, Any]:
+        return {
+            "status": "healthy",
+            "phase": orch.state.phase.value,
+            "version": SAO_VERSION,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    @app.get("/api/v1/system/status")
+    def system_status() -> Dict[str, Any]:
+        return orch.status()
+
+    @app.get("/api/v1/system/info")
+    def system_info() -> Dict[str, Any]:
+        return get_system_info()
+
+    @app.get("/api/v1/agents")
+    def agents_list() -> Dict[str, List[str]]:
+        return list_all_agents()
+
+    @app.get("/api/v1/agents/{department}")
+    def department_detail(department: str) -> Dict[str, Any]:
+        meta = get_department_info(department)
+        if meta is None:
+            raise HTTPException(status_code=404, detail=f"Unknown department: {department}")
+        return meta
+
+    @app.get("/api/v1/agents/{department}/{name}")
+    def agent_detail(department: str, name: str) -> Dict[str, Any]:
+        key = f"{department}.{name}"
+        record = orch.state.agents.get(key)
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"Unknown agent: {key}")
+        return asdict(record)
+
+    @app.post("/api/v1/quantum/sample")
+    async def quantum_sample(req: ReflectRequest) -> Dict[str, Any]:
+        return await orch.reflect(req.decision, req.options)
+
+    return app
+
+
+# A module-level ASGI app for ``uvicorn orchestrator.main:app``
+try:
+    app = build_app()
+except Exception as _e:                                              # pragma: no cover
+    # Defer FastAPI errors until someone actually tries to serve traffic
+    logger.debug("FastAPI app not pre-built: %s", _e)
+    app = None  # type: ignore[assignment]
+
+
+# ---------------------------------------------------------------------------
+# CLI entry-point — `python -m orchestrator.main`
+# ---------------------------------------------------------------------------
+async def _demo() -> None:
+    banner = (
+        "\n" + "=" * 72 +
+        "\n  Divine Agent System — Orchestrator boot\n"
+        f"  version {SAO_VERSION}  ·  {datetime.now(timezone.utc).isoformat(timespec='seconds')}\n"
+        + "=" * 72
+    )
+    print(banner)
+
+    orch = DivineOrchestrator()
+    state = await orch.boot()
+    print(f"\nPhase: {state['phase']}")
+    print(f"Discovered agents: {state['agent_count']}")
+    print(f"Quantum backend: "
+          f"{'available' if orch.quantum and orch.quantum.available else 'unavailable (fallback)'}")
+
+    decision = await orch.reflect(
+        decision="Pick a deployment strategy for service `api`",
+        options=["blue_green", "canary", "rolling", "feature_flags"],
+    )
+    print("\nReflection sample:")
+    print(json.dumps({k: v for k, v in decision.items() if k != "histogram"}, indent=2))
+
+    await orch.shutdown()
+    print("\nDone.\n")
+
 
 if __name__ == "__main__":
-    # Create logs directory
-    (Path(__file__).parent.parent / "logs").mkdir(exist_ok=True)
-    
-    # Run the quantum orchestrator
-    asyncio.run(main())
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
+    )
+    asyncio.run(_demo())

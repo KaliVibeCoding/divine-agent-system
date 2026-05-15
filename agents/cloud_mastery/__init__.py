@@ -1,262 +1,269 @@
 #!/usr/bin/env python3
 """
-Cloud Mastery Department - Divine Cloud Engineering Excellence
+Cloud Mastery Department
+========================
 
-A comprehensive department of specialized cloud engineering agents,
-from foundational infrastructure to quantum-level orchestration and
-consciousness-aware cloud systems.
+The first (and currently most complete) department in the Divine Agent System.
+All nine specialist agents in this department are real Python classes backed
+by concrete agent modules under ``agents/cloud_mastery/<role>/agent.py``.
 
-Department Agents:
-- DevOps Engineer: CI/CD and infrastructure automation mastery
-- Kubernetes Specialist: Container orchestration excellence
-- Serverless Architect: Function-as-a-Service optimization
-- Security Specialist: Cloud security and compliance expertise
-- Monitoring Specialist: Observability and performance monitoring
-- Cost Optimizer: Cloud financial optimization and resource management
-- Data Engineer: Data pipeline and processing orchestration
+Specialists
+-----------
+* ``cloud_architect``       — cloud architecture patterns & blueprints
+* ``cost_optimizer``        — budget tracking, rightsizing, forecasting
+* ``data_engineer``         — data sources, pipelines, quality checks
+* ``devops_engineer``       — CI/CD pipelines, IaC, deployment strategies
+* ``kubernetes_specialist`` — cluster / workload / service management
+* ``monitoring_specialist`` — metrics, alerts, dashboards, SLOs
+* ``security_specialist``   — security policies, threat intel, encryption keys
+* ``serverless_architect``  — FaaS design, event triggers, perf optimisation
+* ``supervisor_agent``      — department-level coordinator / RPC entry-point
 
-Quantum Features:
-- Quantum-enhanced deployment strategies
-- Entangled service communication
-- Superposition-based load balancing
-- Quantum encryption and security
-
-Consciousness Features:
-- Empathetic resource allocation
-- Ethical cloud governance
-- Consciousness-aware monitoring
-- Divine infrastructure stewardship
+The "quantum" and "consciousness" capabilities listed on every agent are
+implemented as simulations (Qiskit Aer sampling and planner/critic reflection
+loops respectively) — they are *features*, not metaphysics.
 """
 
-from .devops_engineer.agent import DevOpsEngineer, DevOpsEngineerRPC
-from .kubernetes_specialist.agent import KubernetesSpecialist, KubernetesSpecialistRPC
-from .serverless_architect.agent import ServerlessArchitect, ServerlessArchitectRPC
-from .security_specialist.agent import SecuritySpecialist, SecuritySpecialistRPC
-from .monitoring_specialist.agent import MonitoringSpecialist, MonitoringSpecialistRPC
-from .cost_optimizer.agent import CostOptimizer, CostOptimizerRPC
-from .data_engineer.agent import DataEngineer, DataEngineerRPC
+from __future__ import annotations
 
-__all__ = [
-    # DevOps Engineer
-    'DevOpsEngineer',
-    'DevOpsEngineerRPC',
-    
-    # Kubernetes Specialist
-    'KubernetesSpecialist',
-    'KubernetesSpecialistRPC',
-    
-    # Serverless Architect
-    'ServerlessArchitect',
-    'ServerlessArchitectRPC',
-    
-    # Security Specialist
-    'SecuritySpecialist',
-    'SecuritySpecialistRPC',
-    
-    # Monitoring Specialist
-    'MonitoringSpecialist',
-    'MonitoringSpecialistRPC',
-    
-    # Cost Optimizer
-    'CostOptimizer',
-    'CostOptimizerRPC',
-    
-    # Data Engineer
-    'DataEngineer',
-    'DataEngineerRPC'
-]
+import logging
+from typing import Any, Dict, List, Optional
 
-# Department metadata
-DEPARTMENT_INFO = {
-    'name': 'Cloud Mastery',
-    'description': 'Divine cloud engineering excellence across all dimensions',
-    'agents': {
-        'devops_engineer': {
-            'class': 'DevOpsEngineer',
-            'rpc_class': 'DevOpsEngineerRPC',
-            'description': 'CI/CD and infrastructure automation mastery',
-            'capabilities': [
-                'Pipeline creation and execution',
-                'Infrastructure template management',
-                'Deployment strategy optimization',
-                'Monitoring and alerting setup',
-                'Quantum-enhanced automation',
-                'Consciousness-aware deployment'
-            ]
-        },
-        'kubernetes_specialist': {
-            'class': 'KubernetesSpecialist',
-            'rpc_class': 'KubernetesSpecialistRPC',
-            'description': 'Container orchestration excellence',
-            'capabilities': [
-                'Workload and service management',
-                'Autoscaling configuration',
-                'Network policy implementation',
-                'Cluster health monitoring',
-                'Quantum orchestration',
-                'Consciousness-aware scaling'
-            ]
-        },
-        'serverless_architect': {
-            'class': 'ServerlessArchitect',
-            'rpc_class': 'ServerlessArchitectRPC',
-            'description': 'Function-as-a-Service optimization',
-            'capabilities': [
-                'Function design and deployment',
-                'Event trigger configuration',
-                'Performance optimization',
-                'Application monitoring',
-                'Quantum function enhancement',
-                'Consciousness-driven events'
-            ]
-        },
-        'security_specialist': {
-            'class': 'SecuritySpecialist',
-            'rpc_class': 'SecuritySpecialistRPC',
-            'description': 'Cloud security and compliance expertise',
-            'capabilities': [
-                'Security policy creation',
-                'Threat intelligence analysis',
-                'Incident response management',
-                'Security assessment execution',
-                'Quantum encryption protocols',
-                'Consciousness-aware security'
-            ]
-        },
-        'monitoring_specialist': {
-            'class': 'MonitoringSpecialist',
-            'rpc_class': 'MonitoringSpecialistRPC',
-            'description': 'Observability and performance monitoring',
-            'capabilities': [
-                'Metric definition and collection',
-                'Alert rule configuration',
-                'Dashboard creation',
-                'SLO management',
-                'Quantum monitoring systems',
-                'Consciousness-integrated observability'
-            ]
-        },
-        'cost_optimizer': {
-            'class': 'CostOptimizer',
-            'rpc_class': 'CostOptimizerRPC',
-            'description': 'Cloud financial optimization and resource management',
-            'capabilities': [
-                'Cost tracking and analysis',
-                'Resource utilization optimization',
-                'Budget management',
-                'Cost forecasting',
-                'Quantum resource optimization',
-                'Consciousness-aware cost management'
-            ]
-        },
-        'data_engineer': {
-            'class': 'DataEngineer',
-            'rpc_class': 'DataEngineerRPC',
-            'description': 'Data pipeline and processing orchestration',
-            'capabilities': [
-                'Data source configuration',
-                'Pipeline creation and execution',
-                'Data quality assessment',
-                'Governance policy management',
-                'Quantum data processing',
-                'Consciousness-aware data ethics'
-            ]
-        }
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Eager imports of the concrete agent classes
+# ---------------------------------------------------------------------------
+from .devops_engineer.agent          import DevOpsEngineer,         DevOpsEngineerRPC
+from .kubernetes_specialist.agent    import KubernetesSpecialist,   KubernetesSpecialistRPC
+from .serverless_architect.agent     import ServerlessArchitect,    ServerlessArchitectRPC
+from .security_specialist.agent      import SecuritySpecialist,     SecuritySpecialistRPC
+from .monitoring_specialist.agent    import MonitoringSpecialist,   MonitoringSpecialistRPC
+from .cost_optimizer.agent           import CostOptimizer,          CostOptimizerRPC
+from .data_engineer.agent            import DataEngineer,           DataEngineerRPC
+
+# Optional sub-agents — wrap import to avoid breaking the whole package
+# if their files have transient issues during ongoing refactors.
+try:
+    from .cloud_architect.agent      import CloudArchitect,         CloudArchitectRPC
+except Exception as _exc:  # pragma: no cover
+    logger.warning("cloud_architect failed to import: %s", _exc)
+    CloudArchitect = CloudArchitectRPC = None  # type: ignore[assignment]
+
+try:
+    from .supervisor_agent.agent     import CloudMasterySupervisor, CloudMasteryRPC
+except Exception as _exc:  # pragma: no cover
+    logger.warning("supervisor_agent failed to import: %s", _exc)
+    CloudMasterySupervisor = CloudMasteryRPC = None  # type: ignore[assignment]
+
+
+# ---------------------------------------------------------------------------
+# Department registry — maps a stable agent name to its factory pair
+# ---------------------------------------------------------------------------
+_AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
+    "devops_engineer": {
+        "class": DevOpsEngineer,
+        "rpc_class": DevOpsEngineerRPC,
+        "description": "CI/CD pipelines and infrastructure automation",
+        "capabilities": [
+            "Pipeline creation and execution",
+            "Infrastructure template management",
+            "Deployment strategy optimisation",
+            "Monitoring & alerting setup",
+            "Quantum-sampled deployment selection (experimental)",
+            "Reflection-driven rollback decisions (experimental)",
+        ],
     },
-    'quantum_features': [
-        'Quantum-enhanced deployment strategies',
-        'Entangled service communication',
-        'Superposition-based load balancing',
-        'Quantum encryption and security',
-        'Quantum data processing algorithms',
-        'Quantum resource optimization'
-    ],
-    'consciousness_features': [
-        'Empathetic resource allocation',
-        'Ethical cloud governance',
-        'Consciousness-aware monitoring',
-        'Divine infrastructure stewardship',
-        'Consciousness-integrated data ethics',
-        'Empathetic deployment orchestration'
-    ]
+    "kubernetes_specialist": {
+        "class": KubernetesSpecialist,
+        "rpc_class": KubernetesSpecialistRPC,
+        "description": "Container orchestration and Kubernetes management",
+        "capabilities": [
+            "Workload and service management",
+            "Autoscaling configuration",
+            "Network policy implementation",
+            "Cluster health monitoring",
+            "Quantum-sampled scheduling hints (experimental)",
+        ],
+    },
+    "serverless_architect": {
+        "class": ServerlessArchitect,
+        "rpc_class": ServerlessArchitectRPC,
+        "description": "Function-as-a-Service design and optimisation",
+        "capabilities": [
+            "Function design and deployment",
+            "Event trigger configuration",
+            "Cold-start / latency optimisation",
+            "Per-invocation cost analysis",
+        ],
+    },
+    "security_specialist": {
+        "class": SecuritySpecialist,
+        "rpc_class": SecuritySpecialistRPC,
+        "description": "Cloud security and compliance",
+        "capabilities": [
+            "Security policy creation",
+            "Threat-intelligence analysis",
+            "Incident response orchestration",
+            "Vulnerability assessment",
+            "Post-quantum-ready key management",
+        ],
+    },
+    "monitoring_specialist": {
+        "class": MonitoringSpecialist,
+        "rpc_class": MonitoringSpecialistRPC,
+        "description": "Observability, SLOs and alerting",
+        "capabilities": [
+            "Metric definition and collection",
+            "Alert rule configuration",
+            "Dashboard creation",
+            "SLO management",
+            "OpenTelemetry trace correlation",
+        ],
+    },
+    "cost_optimizer": {
+        "class": CostOptimizer,
+        "rpc_class": CostOptimizerRPC,
+        "description": "FinOps — cost tracking, rightsizing, budgeting",
+        "capabilities": [
+            "Cost tracking and analysis",
+            "Resource utilisation optimisation",
+            "Budget management",
+            "Cost forecasting",
+        ],
+    },
+    "data_engineer": {
+        "class": DataEngineer,
+        "rpc_class": DataEngineerRPC,
+        "description": "Data sources, pipelines and quality checks",
+        "capabilities": [
+            "Data source configuration",
+            "Pipeline creation and execution",
+            "Data quality assessment",
+            "Governance policy management",
+        ],
+    },
 }
 
-def get_department_info():
-    """Get comprehensive department information"""
+# Conditionally register optional agents
+if CloudArchitect is not None:
+    _AGENT_REGISTRY["cloud_architect"] = {
+        "class": CloudArchitect,
+        "rpc_class": CloudArchitectRPC,
+        "description": "Cloud architecture patterns and blueprints",
+        "capabilities": [
+            "Architectural blueprint design",
+            "Resilience pattern selection",
+            "Cross-tier scalability planning",
+            "Architectural decision records",
+        ],
+    }
+
+if CloudMasterySupervisor is not None:
+    _AGENT_REGISTRY["supervisor_agent"] = {
+        "class": CloudMasterySupervisor,
+        "rpc_class": CloudMasteryRPC,
+        "description": "Department-level coordinator and RPC entry-point",
+        "capabilities": [
+            "Cross-agent task routing",
+            "Health aggregation",
+            "Department-wide reporting",
+        ],
+    }
+
+
+DEPARTMENT_INFO: Dict[str, Any] = {
+    "name": "Cloud Mastery",
+    "description": "Cloud engineering excellence — DevOps, K8s, FaaS, security, observability, FinOps, data",
+    "agents": {
+        name: {
+            "class": entry["class"].__name__,
+            "rpc_class": entry["rpc_class"].__name__ if entry["rpc_class"] else None,
+            "description": entry["description"],
+            "capabilities": list(entry["capabilities"]),
+        }
+        for name, entry in _AGENT_REGISTRY.items()
+    },
+    "experimental_features": [
+        "Quantum-sampled decisions via Qiskit Aer",
+        "Self-reflective planner / critic loops",
+        "Inter-agent entangled-state voting (simulated)",
+    ],
+}
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+def get_department_info() -> Dict[str, Any]:
+    """Return the static metadata for this department."""
     return DEPARTMENT_INFO
 
-def list_agents():
-    """List all available agents in the department"""
-    return list(DEPARTMENT_INFO['agents'].keys())
 
-def get_agent_info(agent_name: str):
-    """Get information about a specific agent"""
-    return DEPARTMENT_INFO['agents'].get(agent_name)
+def list_agents() -> List[str]:
+    """Return a list of agent names available in this department."""
+    return list(_AGENT_REGISTRY.keys())
+
+
+def get_agent_info(agent_name: str) -> Optional[Dict[str, Any]]:
+    """Return the descriptor dict for a single agent."""
+    return DEPARTMENT_INFO["agents"].get(agent_name)
+
 
 def create_agent(agent_name: str):
-    """Create an instance of the specified agent"""
-    agent_info = get_agent_info(agent_name)
-    if not agent_info:
-        raise ValueError(f"Unknown agent: {agent_name}")
-    
-    # Import and create the agent class
-    if agent_name == 'devops_engineer':
-        return DevOpsEngineer()
-    elif agent_name == 'kubernetes_specialist':
-        return KubernetesSpecialist()
-    elif agent_name == 'serverless_architect':
-        return ServerlessArchitect()
-    elif agent_name == 'security_specialist':
-        return SecuritySpecialist()
-    elif agent_name == 'monitoring_specialist':
-        return MonitoringSpecialist()
-    elif agent_name == 'cost_optimizer':
-        return CostOptimizer()
-    elif agent_name == 'data_engineer':
-        return DataEngineer()
-    else:
-        raise ValueError(f"Agent creation not implemented for: {agent_name}")
+    """Instantiate the in-process agent class for ``agent_name``."""
+    entry = _AGENT_REGISTRY.get(agent_name)
+    if entry is None:
+        raise ValueError(
+            f"Unknown agent: {agent_name!r}. "
+            f"Available: {sorted(_AGENT_REGISTRY)}"
+        )
+    return entry["class"]()
+
 
 def create_rpc_agent(agent_name: str):
-    """Create an RPC instance of the specified agent"""
-    agent_info = get_agent_info(agent_name)
-    if not agent_info:
-        raise ValueError(f"Unknown agent: {agent_name}")
-    
-    # Import and create the RPC agent class
-    if agent_name == 'devops_engineer':
-        return DevOpsEngineerRPC()
-    elif agent_name == 'kubernetes_specialist':
-        return KubernetesSpecialistRPC()
-    elif agent_name == 'serverless_architect':
-        return ServerlessArchitectRPC()
-    elif agent_name == 'security_specialist':
-        return SecuritySpecialistRPC()
-    elif agent_name == 'monitoring_specialist':
-        return MonitoringSpecialistRPC()
-    elif agent_name == 'cost_optimizer':
-        return CostOptimizerRPC()
-    elif agent_name == 'data_engineer':
-        return DataEngineerRPC()
-    else:
-        raise ValueError(f"RPC agent creation not implemented for: {agent_name}")
+    """Instantiate the JSON-RPC wrapper for ``agent_name``."""
+    entry = _AGENT_REGISTRY.get(agent_name)
+    if entry is None:
+        raise ValueError(
+            f"Unknown agent: {agent_name!r}. "
+            f"Available: {sorted(_AGENT_REGISTRY)}"
+        )
+    if entry["rpc_class"] is None:
+        raise NotImplementedError(
+            f"No RPC class available for agent {agent_name!r}"
+        )
+    return entry["rpc_class"]()
 
-if __name__ == "__main__":
-    print("🌟 Cloud Mastery Department - Divine Cloud Engineering Excellence 🌟")
-    print(f"Department: {DEPARTMENT_INFO['name']}")
-    print(f"Description: {DEPARTMENT_INFO['description']}")
-    print(f"\nAvailable Agents ({len(DEPARTMENT_INFO['agents'])}):")    
-    
-    for agent_name, agent_info in DEPARTMENT_INFO['agents'].items():
-        print(f"  🤖 {agent_name}: {agent_info['description']}")
-        print(f"     Capabilities: {len(agent_info['capabilities'])} features")
-    
-    print(f"\n⚛️ Quantum Features ({len(DEPARTMENT_INFO['quantum_features'])}):")    
-    for feature in DEPARTMENT_INFO['quantum_features']:
-        print(f"  • {feature}")
-    
-    print(f"\n🧠 Consciousness Features ({len(DEPARTMENT_INFO['consciousness_features'])}):")    
-    for feature in DEPARTMENT_INFO['consciousness_features']:
-        print(f"  • {feature}")
-    
-    print("\n🎉 Cloud Mastery Department ready for divine cloud orchestration! 🎉")
+
+# Back-compat alias — older code (and the test suite) calls this name.
+def create_agent_instance(agent_name: str):
+    """Alias of :func:`create_agent` kept for backward compatibility."""
+    return create_agent(agent_name)
+
+
+__all__ = [
+    # Concrete agent classes
+    "DevOpsEngineer", "DevOpsEngineerRPC",
+    "KubernetesSpecialist", "KubernetesSpecialistRPC",
+    "ServerlessArchitect", "ServerlessArchitectRPC",
+    "SecuritySpecialist", "SecuritySpecialistRPC",
+    "MonitoringSpecialist", "MonitoringSpecialistRPC",
+    "CostOptimizer", "CostOptimizerRPC",
+    "DataEngineer", "DataEngineerRPC",
+    "CloudArchitect", "CloudArchitectRPC",
+    "CloudMasterySupervisor", "CloudMasteryRPC",
+    # Public API
+    "DEPARTMENT_INFO",
+    "get_department_info",
+    "list_agents",
+    "get_agent_info",
+    "create_agent",
+    "create_agent_instance",
+    "create_rpc_agent",
+]
+
+
+if __name__ == "__main__":  # pragma: no cover
+    import json
+    print(json.dumps(DEPARTMENT_INFO, indent=2, default=str))

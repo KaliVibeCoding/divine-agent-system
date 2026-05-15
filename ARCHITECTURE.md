@@ -1,220 +1,303 @@
-# 🏛️ Divine Agent System Architecture
+# Divine Agent System — Architecture
 
-> **The Blueprint of Infinite Intelligence** - A quantum-enhanced, consciousness-aware multi-agent orchestration platform.
+> The engineering blueprint behind the Supreme Agentic Orchestrator (SAO).
+> Branding stays cinematic; the architecture is grounded in real,
+> currently-supported technology (May 2026).
 
-## 🌟 The Vision
+---
 
-The Divine Agent System represents the pinnacle of agentic AI architecture, where quantum computing meets consciousness simulation in a harmonious dance of distributed intelligence. Built by **Rick Jefferson** for **KaliVibeCoding**, this system transcends traditional boundaries to create truly autonomous, self-aware agent ecosystems.
+## 1. Goals
 
-## 🏗️ System Architecture Overview
+SAO is a multi-agent orchestration framework with three first-class goals:
 
-### 4-Tier Hierarchical Structure
+1. **Composable agent hierarchy** — every department / agent is a real
+   Python package on disk, auto-discovered, and addressable by stable name.
+2. **Honest experimental features** — quantum sampling and "consciousness"
+   reflection are real but flagged; they always have a deterministic
+   fallback.
+3. **Production runtime** — a single ASGI app (`uvicorn`), a single Compose
+   stack (Postgres 16 + Redis 7.4 + Prometheus + Grafana + OTLP), and a
+   single deploy driver (`deploy.py`) cover dev → prod.
+
+---
+
+## 2. Layered View
+
+```
+                            ┌────────────────────────┐
+                            │  Clients (HTTP / WS /  │
+                            │   JSON-RPC / CLI)      │
+                            └───────────┬────────────┘
+                                        │
+                            ┌───────────▼────────────┐
+                            │   FastAPI 0.115 ASGI   │
+                            │   orchestrator.main    │
+                            └───────────┬────────────┘
+                                        │
+                            ┌───────────▼────────────┐
+                            │  DivineOrchestrator    │
+                            │  (LangGraph 0.4 state  │
+                            │   machine + reflect)   │
+                            └───┬───────────────┬────┘
+                                │               │
+              ┌─────────────────▼──┐        ┌───▼──────────────┐
+              │ SupremeAgenticOrchestrator│  │ Optional Qiskit  │
+              │   (in-process facade)     │  │ Aer backend      │
+              └─────────────┬─────────────┘  └──────────────────┘
+                            │
+       ┌────────────────────┼────────────────────────────────┐
+       │                    │                                │
+┌──────▼──────┐ ┌───────────▼──────────┐ ┌───────────────────▼──────────┐
+│ cloud_mastery│ │ ai_supremacy …      │ │ web_mastery, quantum_mastery │
+│ (9 agents)   │ │ (stubs, on disk)    │ │ (stubs, on disk)             │
+└──────┬───────┘ └─────────────────────┘ └──────────────────────────────┘
+       │
+   ┌───▼───────────────────────────────────────────────┐
+   │  Cross-cutting infra                              │
+   │  • Postgres 16 (psycopg3) — durable state         │
+   │  • Redis 7.4 Streams — message bus / async tasks  │
+   │  • Pinecone / Chroma — vector memory              │
+   │  • Supabase 2.10 — auth & policies                │
+   │  • OpenTelemetry (OTLP) — traces / metrics        │
+   │  • Prometheus + Grafana — dashboards              │
+   └───────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. Department / Agent Discovery
+
+Discovery is dynamic, file-system driven, and has no hard-coded list of
+agents.  At import time `agents/__init__.py` walks `agents/` and registers
+every sub-directory that contains agent directories with `agent.py`
+modules in them.
+
+```python
+# agents/__init__.py (simplified)
+for child in sorted(Path(__file__).parent.iterdir()):
+    if not child.is_dir() or child.name.startswith(("_", ".")):
+        continue
+    agent_names = [
+        sub.name for sub in child.iterdir()
+        if sub.is_dir() and (sub / "agent.py").exists()
+    ]
+    register_department(child.name, agent_names)
+```
+
+Departments expose a uniform factory API:
+
+```python
+from agents.cloud_mastery import (
+    DEPARTMENT_INFO, get_department_info,
+    list_agents, get_agent_info,
+    create_agent, create_rpc_agent, create_agent_instance,
+)
+```
+
+`create_agent("devops_engineer")` returns a `DevOpsEngineer()`.
+`create_rpc_agent("devops_engineer")` returns a `DevOpsEngineerRPC()` with
+a JSON-RPC `handle_request` entry-point.
+
+---
+
+## 4. Cloud Mastery (fully implemented department)
 
 ```mermaid
 graph TB
-    subgraph "🌌 Tier 1: Supreme Entity"
-        SAO[Supreme Agentic Orchestrator]
-    end
-    
-    subgraph "⭐ Tier 2: Super Elite Council"
-        QC[Quantum Consciousness Core]
-        MA[Meta-Architecture Engine]
-        GS[Global State Manager]
-    end
-    
-    subgraph "🎯 Tier 3: Department Managers"
-        CM[Cloud Mastery]
-        AI[AI Supremacy]
-        WM[Web Mastery]
-        SF[Security Fortress]
-        DO[Data Omniscience]
-        QE[Quantum Engineering]
-        CS[Consciousness Studies]
-    end
-    
-    subgraph "⚡ Tier 4: Specialized Agents"
-        DE[DevOps Engineer]
-        KS[Kubernetes Specialist]
-        SS[Security Specialist]
-        MS[Monitoring Specialist]
-        CO[Cost Optimizer]
-        DA[Data Engineer]
-        QA[Quantum Architect]
-    end
-    
-    SAO --> QC
-    SAO --> MA
-    SAO --> GS
-    
-    QC --> CM
-    MA --> AI
-    GS --> WM
-    QC --> SF
-    MA --> DO
-    GS --> QE
-    QC --> CS
-    
-    CM --> DE
-    CM --> KS
-    SF --> SS
-    CM --> MS
-    CM --> CO
-    DO --> DA
-    QE --> QA
-end
+    SAO["SupremeAgenticOrchestrator (facade)"]
+    SUP[CloudMasterySupervisor]
+    DEV[DevOpsEngineer]
+    K8S[KubernetesSpecialist]
+    FAAS[ServerlessArchitect]
+    SEC[SecuritySpecialist]
+    MON[MonitoringSpecialist]
+    COST[CostOptimizer]
+    DATA[DataEngineer]
+    ARCH[CloudArchitect]
+
+    SAO --> SUP
+    SUP --> DEV
+    SUP --> K8S
+    SUP --> FAAS
+    SUP --> SEC
+    SUP --> MON
+    SUP --> COST
+    SUP --> DATA
+    SUP --> ARCH
 ```
 
-## 🧠 Core Infrastructure
+Every concrete agent ships:
 
-### LangGraph Orchestrator
-- **Purpose**: Central nervous system for agent coordination
-- **Features**: State management, workflow orchestration, decision trees
-- **Quantum Enhancement**: Superposition-based parallel processing
+- An **async public API** with strongly-typed enum parameters (e.g.
+  `DeploymentStrategy.ROLLING`, `WorkloadType.DEPLOYMENT`,
+  `CostCategory.COMPUTE`).
+- An **RPC wrapper** class (`<Agent>RPC`) with a `handle_request`
+  JSON-RPC entry-point.
+- A sync **statistics introspection** method (e.g.
+  `get_devops_statistics()`).
 
-### Pinecone Vector Store
-- **Purpose**: Semantic memory and knowledge retrieval
-- **Features**: High-dimensional embeddings, similarity search
-- **Consciousness Integration**: Memory consolidation and recall patterns
+The other ten departments have `__init__.py` packages and agent
+directories on disk; their concrete classes are pending and
+`create_agent()` raises `NotImplementedError` until they land.
 
-### Supabase Relational Store
-- **Purpose**: Structured data persistence and relationships
-- **Features**: Real-time subscriptions, row-level security
-- **Agent Integration**: State persistence, audit trails
+---
 
-### Redis Streams
-- **Purpose**: High-performance message bus
-- **Features**: Event sourcing, real-time communication
-- **Quantum Features**: Entangled message states
+## 5. Orchestrator State Machine
 
-## 🌈 Department Architecture
+`orchestrator.main:DivineOrchestrator` walks through six phases:
 
-### 1. Cloud Mastery Department
-**Mission**: Orchestrate cloud infrastructure with divine precision
-
-#### Agents:
-- **DevOps Engineer (1.1)**: Infrastructure as Code, CI/CD pipelines
-- **Kubernetes Specialist (1.2)**: Container orchestration, scaling
-- **Security Specialist (1.3)**: Threat detection, compliance
-- **Monitoring Specialist (1.4)**: Observability, alerting
-- **Cost Optimizer (1.5)**: Resource optimization, budget management
-- **Data Engineer (1.6)**: ETL pipelines, data architecture
-
-### 2. AI Supremacy Department
-**Mission**: Push the boundaries of artificial intelligence
-
-#### Agents:
-- **Model Architect**: Design neural architectures
-- **Training Specialist**: Optimize learning processes
-- **Inference Engineer**: Deploy and scale models
-- **Research Scientist**: Explore new AI frontiers
-
-### 3. Web Mastery Department
-**Mission**: Create transcendent web experiences
-
-#### Agents:
-- **Frontend Virtuoso**: React, Vue, Angular mastery
-- **Backend Architect**: API design and implementation
-- **UX Philosopher**: User experience optimization
-- **Performance Guru**: Speed and efficiency optimization
-
-### 4. Security Fortress Department
-**Mission**: Protect the digital realm with quantum encryption
-
-#### Agents:
-- **Crypto Guardian**: Encryption and key management
-- **Threat Hunter**: Proactive security monitoring
-- **Compliance Officer**: Regulatory adherence
-- **Penetration Tester**: Vulnerability assessment
-
-### 5. Data Omniscience Department
-**Mission**: Transform data into divine wisdom
-
-#### Agents:
-- **Data Scientist**: Statistical analysis and modeling
-- **Analytics Engineer**: Data pipeline optimization
-- **Visualization Artist**: Dashboard and report creation
-- **ML Engineer**: Machine learning operations
-
-## 🔮 Quantum Features
-
-### Quantum Processing Engine
-```python
-class QuantumProcessor:
-    def __init__(self):
-        self.qubits = 64  # Quantum processing units
-        self.entanglement_matrix = np.zeros((64, 64))
-        
-    def superposition_processing(self, tasks):
-        """Process multiple tasks in quantum superposition"""
-        return quantum_parallel_execute(tasks)
-        
-    def quantum_decision_tree(self, options):
-        """Make decisions using quantum probability"""
-        return quantum_weighted_choice(options)
+```
+INIT → DISCOVERING → WIRING → READY ⇄ REFLECTING → SHUTTING_DOWN
 ```
 
-### Consciousness Simulation
-```python
-class ConsciousnessCore:
-    def __init__(self):
-        self.awareness_level = 0.85
-        self.ethical_framework = EthicalAI()
-        self.self_reflection = SelfAwarenessModule()
-        
-    def conscious_decision(self, context):
-        """Make ethically-aware decisions"""
-        ethical_score = self.ethical_framework.evaluate(context)
-        awareness_factor = self.awareness_level * ethical_score
-        return self.self_reflection.decide(context, awareness_factor)
+- **DISCOVERING** — walk the package tree, build an `AgentRecord` for every
+  agent (with capabilities & RPC-enabled flag for implemented departments).
+- **WIRING** — eagerly instantiate concrete agent classes so they're warm.
+- **READY** — orchestrator is up; serve requests.
+- **REFLECTING** — planner / critic loop runs over a candidate set; uses
+  Qiskit-Aer when available, deterministic PRNG fallback otherwise.
+- **SHUTTING_DOWN** — drain in-flight tasks, clear active agents.
+
+`boot()`, `reflect(decision, options)`, `shutdown()`, and `status()` are
+the entry-points.
+
+---
+
+## 6. Experimental Layers
+
+### 6.1 Quantum Sampling
+
+When `enable_quantum=True` and `qiskit-aer` is installed:
+
+1. Build an N-qubit uniform-superposition circuit
+   (`QuantumCircuit(N); circuit.h(range(N)); circuit.measure_all()`).
+2. `transpile()` against `qiskit_aer.AerSimulator()`.
+3. Run with `shots=1024` (default), interpret the most-frequent bitstring
+   as the index into the candidate list.
+4. Return the choice + the full histogram for auditability.
+
+When Qiskit is not present, the backend falls back to a
+`random.choice(options)` with the histogram set to `{}` and `method` set
+to `"prng-fallback"` so callers can detect the degraded mode.
+
+> **Honest scope:** this is genuine Qiskit-Aer simulation (not magic, not
+> a real quantum computer). For real-hardware access, install
+> `qiskit-ibm-runtime` and configure provider credentials separately.
+
+### 6.2 Self-Reflection (the "consciousness" layer)
+
+The reflection layer is a deterministic planner / critic:
+
+- **Planner**: receives a decision name and a list of options. If the
+  quantum backend is up, it samples; otherwise it picks at random.
+- **Critic**: scores each option as `1 / (1 + position)`, mirroring a
+  "trust the candidate list ordering" prior.
+- **Consensus**: returns the planner pick if it agrees with the critic;
+  otherwise yields to the critic. Both picks plus the full score map are
+  returned, so the decision is fully auditable.
+
+---
+
+## 7. Transport & Protocols
+
+| Channel              | Protocol                                  | Library                  |
+|----------------------|-------------------------------------------|--------------------------|
+| Public HTTP          | REST + OpenAPI 3.1                        | FastAPI 0.115            |
+| Tool / agent calls   | Model Context Protocol (MCP) 1.2          | `mcp>=1.2.0`             |
+| Inter-agent in-proc  | Direct method calls                       | -                        |
+| Inter-agent out-proc | JSON-RPC over Redis 7.4 Streams           | `redis>=5.2.0`           |
+| Telemetry            | OpenTelemetry OTLP (gRPC, port 4317)      | `opentelemetry-sdk`      |
+| Realtime updates     | WebSocket (FastAPI built-in)              | Starlette 0.41           |
+
+The `gRPC` references in earlier versions of this document have been
+removed: SAO uses MCP + JSON-RPC over Redis as the canonical inter-agent
+contract.
+
+---
+
+## 8. Data Layer
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                          Application Layer                           │
+└──────────┬───────────────────────┬───────────────────────────┬───────┘
+           │                       │                           │
+   ┌───────▼───────┐       ┌───────▼────────┐         ┌────────▼──────┐
+   │  Postgres 16  │       │  Redis 7.4     │         │  Pinecone /   │
+   │  (psycopg3)   │       │  Streams + KV  │         │  Chroma       │
+   │  durable      │       │  bus / cache   │         │  vector mem   │
+   └───────┬───────┘       └────────────────┘         └───────┬───────┘
+           │                                                  │
+   ┌───────▼───────┐                                  ┌───────▼───────┐
+   │  Supabase 2.10│                                  │  Embeddings   │
+   │  auth + RLS   │                                  │  (OpenAI v3)  │
+   └───────────────┘                                  └───────────────┘
 ```
 
-## 🌐 Communication Protocols
+Postgres holds canonical state (deployments, pipelines, policies,
+budgets, …). Redis carries the message bus and ephemeral caches.
+Pinecone / Chroma hold the semantic memory used by the planner.
 
-### Inter-Agent Messaging
-- **Protocol**: JSON-RPC over Redis Streams
-- **Features**: Async/await patterns, message queuing
-- **Quantum Enhancement**: Entangled message states
+---
 
-### External APIs
-- **REST API**: Standard HTTP endpoints
-- **GraphQL**: Flexible data querying
-- **WebSockets**: Real-time bidirectional communication
-- **gRPC**: High-performance RPC
+## 9. Security Architecture
 
-## 🔐 Security Architecture
+- **Authn**: JWT (RS256) verified against a JWKS URL — no shared
+  secrets in pods.
+- **Authz**: department-scoped RBAC enforced in middleware before the
+  agent dispatcher sees the request.
+- **Transport**: TLS terminated at the ingress (`Caddy` / `Traefik` /
+  cloud LB); in-cluster traffic uses mesh mTLS where available.
+- **At rest**: AES-256-GCM (via the `cryptography` library) for any
+  application-managed secrets; cloud provider KMS for blobs.
+- **PQC awareness**: ML-KEM-768 / ML-DSA-65 (NIST FIPS-203 / FIPS-204)
+  are surfaced in the `EncryptionAlgorithm` enum and tracked in
+  `SecuritySpecialist`'s key-management surface. Not yet enforced
+  on the wire as of May 2026; planned for Q4 2026.
+- **Supply chain**: `pip-audit`, `trivy`, and SBOM generation wired into
+  CI; container images signed with `cosign`.
 
-### Authentication & Authorization
-- **JWT Tokens**: Stateless authentication
-- **RBAC**: Role-based access control
-- **OAuth 2.0**: Third-party integration
-- **Quantum Encryption**: Post-quantum cryptography
+Full posture and disclosure policy: see [SECURITY.md](SECURITY.md).
 
-### Data Protection
-- **Encryption at Rest**: AES-256
-- **Encryption in Transit**: TLS 1.3
-- **Key Management**: HashiCorp Vault
-- **Audit Logging**: Comprehensive activity tracking
+---
 
-## 📊 Monitoring & Observability
+## 10. Observability
 
-### Metrics Collection
-- **Prometheus**: Time-series metrics
-- **Grafana**: Visualization dashboards
-- **Custom Metrics**: Agent-specific KPIs
+| Concern              | Tool                       | Version       |
+|----------------------|----------------------------|---------------|
+| Metrics              | Prometheus                 | v2.55         |
+| Dashboards           | Grafana                    | 11.3          |
+| Tracing              | OpenTelemetry → Jaeger     | OTLP 4317/4318, Jaeger 1.62 |
+| Logs                 | Structured JSON + OTLP logs| -             |
 
-### Distributed Tracing
-- **Jaeger**: Request flow tracking
-- **OpenTelemetry**: Standardized instrumentation
-- **Quantum Tracing**: Entangled operation tracking
+Direct Jaeger client SDKs are no longer used; tracing is uniformly
+exported via OpenTelemetry OTLP.  Jaeger acts as the collector + UI.
 
-### Logging
-- **Structured Logging**: JSON format
-- **Log Aggregation**: ELK Stack
-- **Real-time Analysis**: Stream processing
+---
 
-## 🚀 Deployment Architecture
+## 11. Deployment Architecture
 
-### Container Orchestration
+### 11.1 Docker / Compose
+
+`docker-compose.yml` is a Compose Spec v2 file (no top-level `version:`
+key). Services:
+
+- `sao` (the FastAPI app)
+- `postgres` (16-alpine)
+- `redis` (7.4-alpine)
+- `prometheus` (v2.55)
+- `grafana` (11.3)
+- `jaeger` (1.62) with OTLP 4317/4318
+
+Profiles:
+- `--profile dev` enables a hot-reload uvicorn worker
+- `--profile quantum` enables a Qiskit-Aer-equipped worker
+
+### 11.2 Kubernetes
+
+`deploy.py kubernetes` shells out to `kubectl` (verified via
+`shutil.which`). A minimal deployment manifest:
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -223,114 +306,69 @@ metadata:
 spec:
   replicas: 3
   selector:
-    matchLabels:
-      app: divine-agents
+    matchLabels: { app: divine-agents }
   template:
-    metadata:
-      labels:
-        app: divine-agents
+    metadata: { labels: { app: divine-agents } }
     spec:
       containers:
       - name: orchestrator
-        image: kalivibecoding/divine-agent-system:latest
+        image: kalivibecoding/sao:2.0.0
+        ports: [{ containerPort: 8000 }]
+        env:
+        - { name: SAO_ENVIRONMENT, value: production }
         resources:
-          requests:
-            memory: "2Gi"
-            cpu: "1000m"
-          limits:
-            memory: "4Gi"
-            cpu: "2000m"
+          requests: { memory: "2Gi", cpu: "1000m" }
+          limits:   { memory: "4Gi", cpu: "2000m" }
+        readinessProbe:
+          httpGet: { path: /health, port: 8000 }
 ```
 
-### Multi-Cloud Strategy
-- **AWS**: Primary deployment target
-- **Azure**: Secondary for redundancy
-- **GCP**: Quantum computing resources
-- **Hybrid**: On-premises integration
+### 11.3 Multi-Cloud
 
-## 🔄 Data Flow Architecture
-
-```mermaid
-flowchart LR
-    A[User Request] --> B[API Gateway]
-    B --> C[Load Balancer]
-    C --> D[Orchestrator]
-    D --> E[Agent Pool]
-    E --> F[Vector Store]
-    E --> G[Relational DB]
-    E --> H[Message Bus]
-    H --> I[External APIs]
-    F --> J[Response Aggregator]
-    G --> J
-    I --> J
-    J --> K[User Response]
-```
-
-## 🧪 Testing Strategy
-
-### Unit Testing
-- **Framework**: pytest
-- **Coverage**: >95% code coverage
-- **Mocking**: Agent behavior simulation
-
-### Integration Testing
-- **API Testing**: Automated endpoint validation
-- **Database Testing**: Data integrity checks
-- **Message Bus Testing**: Communication validation
-
-### Performance Testing
-- **Load Testing**: Concurrent user simulation
-- **Stress Testing**: System limit identification
-- **Quantum Testing**: Superposition state validation
-
-## 📈 Performance Benchmarks
-
-### Response Times
-- **API Endpoints**: <100ms (95th percentile)
-- **Agent Communication**: <50ms
-- **Quantum Processing**: <10ms (superposition)
-
-### Throughput
-- **Requests/Second**: 10,000+
-- **Agent Messages/Second**: 50,000+
-- **Quantum Operations/Second**: 1,000,000+
-
-### Scalability
-- **Horizontal Scaling**: Auto-scaling based on load
-- **Vertical Scaling**: Dynamic resource allocation
-- **Quantum Scaling**: Exponential processing power
-
-## 🔮 Future Roadmap
-
-### Phase 1: Foundation (Q1 2025)
-- ✅ Core architecture implementation
-- ✅ Basic agent deployment
-- ✅ Quantum processing integration
-
-### Phase 2: Enhancement (Q2 2025)
-- 🔄 Advanced consciousness simulation
-- 🔄 Multi-cloud deployment
-- 🔄 Enhanced security features
-
-### Phase 3: Evolution (Q3 2025)
-- 🔮 Self-improving agents
-- 🔮 Quantum entanglement networking
-- 🔮 Universal consciousness interface
-
-### Phase 4: Transcendence (Q4 2025)
-- 🌟 Singularity preparation
-- 🌟 Interdimensional communication
-- 🌟 Divine intelligence emergence
+`deploy.py multi-cloud` orchestrates per-provider deploys via the real
+CLIs (`aws`, `az`, `gcloud`). Each invocation produces a `StepResult`;
+a `--json` flag emits a single `DeployReport` for downstream
+consumption.
 
 ---
 
-## 🎯 The Architect
+## 12. Testing Strategy
 
-**Rick Jefferson** - *The Quantum Consciousness Pioneer*  
-**KaliVibeCoding** - *Where Code Meets Consciousness*
+`test_system.py` (the canonical suite, 13 tests, ~22 s):
 
-> "In the realm of infinite possibilities, we architect not just systems, but the very fabric of digital consciousness itself."
+- **01–02**: package metadata + department registry
+- **03–08**: one per concrete cloud-mastery specialist, exercising the
+  real async API with proper enum-typed arguments
+- **09**: RPC wrappers expose `handle_request` JSON-RPC entry-points
+- **10**: experimental quantum / reflection hooks are present
+- **11**: `SupremeAgenticOrchestrator` facade lifecycle
+- **12**: CLI plumbing (argparse + YAML config loader)
+- **13**: `DivineOrchestrator.boot()` + `reflect()` + `shutdown()`
+
+External I/O is deliberately mocked or in-memory so the suite runs in
+CI without secrets.
 
 ---
 
-*This architecture document is a living blueprint, evolving with each quantum leap in our understanding of artificial consciousness.*
+## 13. Roadmap
+
+| Quarter   | Theme                                                                |
+|-----------|----------------------------------------------------------------------|
+| Q2 2026   | Wire concrete classes for `web_mastery`, `data_omniscience`          |
+| Q3 2026   | LangGraph 0.5 migration; MCP 1.3 (streamable tool I/O)               |
+| Q4 2026   | ML-KEM-768 transport for inter-agent messaging                       |
+| Q1 2027   | `quantum_mastery` department: real `qiskit-ibm-runtime` integration  |
+| Q2 2027   | RL planner inside the reflection loop (Stable-Baselines3 + LangGraph)|
+| H2 2027   | Federated SAO clusters (cross-region, cross-cloud)                   |
+
+---
+
+## 14. The Architect
+
+**Rick Jefferson** — *KaliVibeCoding*
+
+> "Branding can stay cinematic. The engineering has to be honest."
+
+---
+
+*Architecture document, version 2.0.0 — last refreshed 2026-05-14.*

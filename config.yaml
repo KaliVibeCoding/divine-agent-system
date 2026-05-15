@@ -1,338 +1,285 @@
-# Divine Agent System - Supreme Agentic Orchestrator (SAO)
-# Main Configuration File
+# =============================================================================
+# Divine Agent System — Supreme Agentic Orchestrator (SAO)
+# Main configuration
+# Last refreshed: 2026-05-14
+# =============================================================================
 
-# System Information
 system:
   name: "Divine Agent System"
-  version: "1.0.0"
-  description: "Supreme Agentic Orchestrator - Multi-Agent Cloud Mastery System"
-  environment: "development"  # development, staging, production
+  version: "2.0.0"
+  release_date: "2026-05-14"
+  description: "Supreme Agentic Orchestrator — LangGraph-based multi-agent system"
+  environment: "development"   # development | staging | production
   debug: true
-  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_level: "INFO"            # DEBUG | INFO | WARNING | ERROR | CRITICAL
+  python_version: "3.12"
 
-# Core Architecture Components
+# -----------------------------------------------------------------------------
+# Core architecture components — every value here points at *real* tech as of
+# May 2026. Anything experimental is flagged explicitly.
+# -----------------------------------------------------------------------------
 architecture:
   orchestrator:
-    type: "LangGraph"
+    type: "langgraph"
+    version: ">=0.4.0"
     state_machine: true
     workflow_engine: true
-    
+
+  agent_protocol:
+    type: "mcp"                # Model Context Protocol
+    version: ">=1.2.0"
+    a2a_compatible: true       # interoperable with Agent-to-Agent spec
+
   memory:
     vector_store:
-      provider: "Pinecone"
+      provider: "pinecone"     # alternatives: chroma, weaviate, qdrant
       index_name: "divine-agents"
-      dimension: 1536
+      dimension: 1536          # text-embedding-3-small default
       metric: "cosine"
-    
     relational_store:
-      provider: "Supabase"
+      provider: "supabase"     # Postgres 16 under the hood
       database: "divine_agents_db"
       schema: "public"
-    
+
   message_bus:
-    provider: "Redis"
+    provider: "redis"
+    version: ">=7.2"
     streams: true
     pub_sub: true
     clustering: false
 
-# Department Configuration
+# -----------------------------------------------------------------------------
+# Departments — wired to the on-disk packages under agents/. Only
+# `cloud_mastery` is fully implemented in this release; the rest are
+# discoverable stubs that register through agents/<dept>/__init__.py.
+# -----------------------------------------------------------------------------
 departments:
   cloud_mastery:
     enabled: true
-    description: "Master cloud infrastructure, from basic deployments to quantum-level orchestration"
+    status: "implemented"
     agents:
-      devops_engineer:
-        enabled: true
-        max_instances: 3
-        auto_scale: true
-      kubernetes_specialist:
-        enabled: true
-        max_instances: 2
-        auto_scale: true
-      serverless_architect:
-        enabled: true
-        max_instances: 2
-        auto_scale: false
-      security_specialist:
-        enabled: true
-        max_instances: 1
-        auto_scale: false
-      monitoring_specialist:
-        enabled: true
-        max_instances: 2
-        auto_scale: true
-      cost_optimizer:
-        enabled: true
-        max_instances: 1
-        auto_scale: false
-      data_engineer:
-        enabled: true
-        max_instances: 2
-        auto_scale: true
+      devops_engineer:        { enabled: true,  max_instances: 3, auto_scale: true  }
+      kubernetes_specialist:  { enabled: true,  max_instances: 2, auto_scale: true  }
+      serverless_architect:   { enabled: true,  max_instances: 2, auto_scale: false }
+      security_specialist:    { enabled: true,  max_instances: 1, auto_scale: false }
+      monitoring_specialist:  { enabled: true,  max_instances: 2, auto_scale: true  }
+      cost_optimizer:         { enabled: true,  max_instances: 1, auto_scale: false }
+      data_engineer:          { enabled: true,  max_instances: 2, auto_scale: true  }
+      cloud_architect:        { enabled: true,  max_instances: 1, auto_scale: false }
+      supervisor_agent:       { enabled: true,  max_instances: 1, auto_scale: false }
 
-# Agent Configuration
+  ai_supremacy:           { enabled: false, status: "stub" }
+  ai_ml_mastery:          { enabled: false, status: "stub" }
+  automation_empire:      { enabled: false, status: "stub" }
+  blockchain_mastery:     { enabled: false, status: "stub" }
+  cloud_computing_mastery: { enabled: false, status: "stub" }
+  data_omniscience:       { enabled: false, status: "stub" }
+  quantum_mastery:        { enabled: false, status: "stub" }
+  security_fortress:      { enabled: false, status: "stub" }
+  system_orchestration:   { enabled: false, status: "stub" }
+  web_mastery:            { enabled: false, status: "stub" }
+
+# -----------------------------------------------------------------------------
+# Agent runtime defaults
+# -----------------------------------------------------------------------------
 agents:
   default_settings:
-    timeout: 300  # seconds
+    timeout: 300                # seconds
     retry_attempts: 3
-    retry_delay: 5  # seconds
-    health_check_interval: 60  # seconds
-    
+    retry_delay: 5
+    health_check_interval: 60
+
+  llm:
+    default_model: "gpt-5"                  # OpenAI flagship as of mid-2026
+    fallback_model: "claude-sonnet-4.5"     # Anthropic fallback
+    temperature: 0.2
+    max_tokens: 4096
+
   quantum_features:
     enabled: true
-    simulation_backend: "qiskit"
-    quantum_circuits: true
+    backend: "qiskit-aer"       # honest about being a *simulator*
+    qubits: 5                   # small by design — these are decisions, not
+                                # production quantum jobs
     superposition_states: true
     entanglement_protocols: true
-    
-  consciousness_features:
-    enabled: true
-    self_awareness: true
-    learning_adaptation: true
-    emotional_intelligence: true
-    intuitive_reasoning: true
+    experimental: true
 
-# Communication Protocols
-communication:
-  json_rpc:
+  reflection_features:           # was "consciousness_features"
     enabled: true
-    version: "2.0"
-    port: 8080
-    
+    self_critique: true
+    planner_critic_loops: true
+    ethical_guardrails: true
+    experimental: true
+
+# -----------------------------------------------------------------------------
+# Communication protocols
+# -----------------------------------------------------------------------------
+communication:
   rest_api:
     enabled: true
+    host: "0.0.0.0"
     port: 8000
     cors_enabled: true
     rate_limiting: true
-    
+
   websockets:
     enabled: true
     port: 8001
     heartbeat_interval: 30
-    
+
+  json_rpc:
+    enabled: true
+    version: "2.0"
+    port: 8080
+
   grpc:
     enabled: false
     port: 50051
 
-# Security Configuration
+# -----------------------------------------------------------------------------
+# Security
+# -----------------------------------------------------------------------------
 security:
   authentication:
     enabled: true
-    method: "jwt"  # jwt, oauth2, api_key
-    token_expiry: 3600  # seconds
-    
+    method: "jwt"
+    token_expiry: 3600
   authorization:
     enabled: true
-    rbac: true  # Role-Based Access Control
+    rbac: true
     permissions_model: "strict"
-    
   encryption:
     at_rest: true
     in_transit: true
     algorithm: "AES-256-GCM"
-    
+    post_quantum_kem: "ML-KEM-768"   # NIST FIPS-203 (formerly Kyber)
+    post_quantum_sig: "ML-DSA-65"    # NIST FIPS-204 (formerly Dilithium)
   audit:
     enabled: true
     log_all_actions: true
     retention_days: 90
 
-# Monitoring and Observability
+# -----------------------------------------------------------------------------
+# Observability
+# -----------------------------------------------------------------------------
 monitoring:
   metrics:
     enabled: true
     provider: "prometheus"
     port: 9090
-    scrape_interval: 15  # seconds
-    
+    scrape_interval: 15
   logging:
     enabled: true
     format: "json"
     rotation: "daily"
     max_size: "100MB"
     retention_days: 30
-    
   tracing:
     enabled: true
-    provider: "jaeger"
+    provider: "opentelemetry"      # OTLP exporter, jaeger-compatible
     sampling_rate: 0.1
-    
   alerting:
     enabled: true
     channels: ["email", "slack", "webhook"]
     severity_levels: ["critical", "warning", "info"]
 
-# Performance Configuration
+# -----------------------------------------------------------------------------
+# Performance / capacity
+# -----------------------------------------------------------------------------
 performance:
   concurrency:
     max_workers: 10
     thread_pool_size: 20
     async_tasks_limit: 100
-    
   caching:
     enabled: true
     provider: "redis"
-    ttl: 3600  # seconds
+    ttl: 3600
     max_memory: "512MB"
-    
   rate_limiting:
     enabled: true
     requests_per_minute: 1000
     burst_limit: 100
 
-# Database Configuration
+# -----------------------------------------------------------------------------
+# Database
+# -----------------------------------------------------------------------------
 database:
+  driver: "psycopg3"
   connections:
     max_pool_size: 20
     min_pool_size: 5
     connection_timeout: 30
     idle_timeout: 300
-    
   migrations:
     auto_migrate: true
     backup_before_migration: true
-    
   backup:
     enabled: true
-    schedule: "0 2 * * *"  # Daily at 2 AM
+    schedule: "0 2 * * *"
     retention_days: 30
 
-# Cloud Provider Configuration
+# -----------------------------------------------------------------------------
+# Cloud providers — toggle as credentials are provided via env vars.
+# -----------------------------------------------------------------------------
 cloud_providers:
   aws:
     enabled: true
     regions: ["us-east-1", "us-west-2", "eu-west-1"]
     services: ["ec2", "s3", "lambda", "rds", "eks"]
-    
   azure:
     enabled: true
-    regions: ["eastus", "westus2", "westeurope"]
+    regions: ["eastus", "westus3", "westeurope"]
     services: ["vm", "storage", "functions", "sql", "aks"]
-    
   gcp:
     enabled: true
     regions: ["us-central1", "us-west1", "europe-west1"]
     services: ["compute", "storage", "functions", "sql", "gke"]
 
-# Development Configuration
-development:
-  hot_reload: true
-  auto_restart: true
-  debug_mode: true
-  profiling: true
-  
-  testing:
-    unit_tests: true
-    integration_tests: true
-    load_tests: false
-    coverage_threshold: 80
-
-# Production Configuration
-production:
-  high_availability: true
-  load_balancing: true
-  auto_scaling: true
-  disaster_recovery: true
-  
-  optimization:
-    cpu_optimization: true
-    memory_optimization: true
-    network_optimization: true
-    storage_optimization: true
-
-# Feature Flags
+# -----------------------------------------------------------------------------
+# Feature flags
+# -----------------------------------------------------------------------------
 feature_flags:
-  quantum_computing: true
-  consciousness_simulation: true
-  advanced_ai: true
+  langgraph_orchestration: true
+  mcp_tool_protocol: true
+  quantum_simulation: true
+  reflection_loops: true
   multi_cloud: true
   edge_computing: false
   blockchain_integration: false
 
-# External Integrations
-integrations:
-  slack:
-    enabled: false
-    webhook_url: ""
-    
-  discord:
-    enabled: false
-    bot_token: ""
-    
-  teams:
-    enabled: false
-    webhook_url: ""
-    
-  email:
-    enabled: false
-    smtp_server: ""
-    smtp_port: 587
-    
-  github:
-    enabled: false
-    api_token: ""
-    
-  jira:
-    enabled: false
-    api_url: ""
-    api_token: ""
-
-# Resource Limits
+# -----------------------------------------------------------------------------
+# Resource limits
+# -----------------------------------------------------------------------------
 resource_limits:
   memory:
     max_per_agent: "1GB"
     total_system: "8GB"
-    
   cpu:
     max_per_agent: "2 cores"
     total_system: "8 cores"
-    
   storage:
     max_per_agent: "10GB"
     total_system: "100GB"
-    
   network:
     max_bandwidth: "1Gbps"
     max_connections: 10000
 
-# Backup and Recovery
-backup:
-  enabled: true
-  schedule: "0 1 * * *"  # Daily at 1 AM
-  retention_policy:
-    daily: 7
-    weekly: 4
-    monthly: 12
-  
-  storage:
-    provider: "s3"
-    encryption: true
-    compression: true
-
-# Compliance and Governance
+# -----------------------------------------------------------------------------
+# Compliance
+# -----------------------------------------------------------------------------
 compliance:
-  gdpr:
-    enabled: true
-    data_retention_days: 365
-    
-  hipaa:
-    enabled: false
-    
-  sox:
-    enabled: false
-    
-  pci_dss:
-    enabled: false
+  gdpr:    { enabled: true,  data_retention_days: 365 }
+  hipaa:   { enabled: false }
+  sox:     { enabled: false }
+  pci_dss: { enabled: false }
+  eu_ai_act: { enabled: true, risk_classification: "limited" }
 
-# Custom Extensions
-extensions:
-  custom_agents: []
-  custom_departments: []
-  custom_protocols: []
-  custom_integrations: []
-
-# Environment Variables Override
-# These can be overridden by environment variables with DIVINE_AGENT_ prefix
-# Example: DIVINE_AGENT_SYSTEM_DEBUG=false
+# -----------------------------------------------------------------------------
+# Environment variable overrides
+# Any setting in this file can be overridden by an env var prefixed
+# `DIVINE_AGENT_` (e.g. DIVINE_AGENT_SYSTEM_DEBUG=false).
+# -----------------------------------------------------------------------------
 env_override:
   enabled: true
   prefix: "DIVINE_AGENT_"

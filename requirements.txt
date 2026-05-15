@@ -1,154 +1,140 @@
-# Divine Agent System - Python Dependencies
+# =============================================================================
+# Divine Agent System — Python Dependencies
+# Pinned for the May 2026 ecosystem (Python 3.12 baseline, 3.13 supported)
+#
+# Notes:
+#   * Stdlib modules (asyncio, os, sys, pathlib, sqlite3, math, random,
+#     statistics, concurrent.futures, multiprocessing, threading) are NOT
+#     listed here — they ship with CPython.
+#   * Experimental / fictional packages from the original spec
+#     (neurosymbolic, cognitive-architectures, qiskit-ibmq-provider) have been
+#     removed. qiskit-ibmq-provider was retired in 2024 — use `qiskit-ibm-runtime`.
+#   * Versions reflect the active ecosystem as of 2026-05-14.
+# =============================================================================
 
-# Core async and data handling
-asyncio-mqtt>=0.13.0
-aiohttp>=3.8.0
-aiofiles>=23.0.0
+# ---- Core async & HTTP ------------------------------------------------------
+aiohttp>=3.11.0,<4.0
+aiofiles>=24.1.0
+httpx>=0.28.0
+requests>=2.32.0
+websockets>=13.0
+uvloop>=0.21.0; sys_platform != "win32"
 
-# Data structures and validation
-pydantic>=2.0.0
-dataclasses-json>=0.6.0
-typing-extensions>=4.5.0
+# ---- Validation & typing ----------------------------------------------------
+pydantic>=2.10.0,<3.0
+pydantic-settings>=2.7.0
+dataclasses-json>=0.6.7
+typing-extensions>=4.12.0
 
-# Date and time handling
-python-dateutil>=2.8.0
-pytz>=2023.3
+# ---- Date / time / serialization -------------------------------------------
+python-dateutil>=2.9.0
+pytz>=2025.1
+orjson>=3.10.0
+PyYAML>=6.0.2
+tomli>=2.0.2; python_version < "3.11"
 
-# JSON and serialization
-orjson>=3.9.0
-ujson>=5.8.0
+# ---- Cryptography & auth ----------------------------------------------------
+cryptography>=44.0.0
+bcrypt>=4.2.0
+PyJWT>=2.10.0
 
-# Cryptography and security
-cryptography>=41.0.0
-bcrypt>=4.0.0
-PyJWT>=2.8.0
+# ---- Database connectors ----------------------------------------------------
+psycopg[binary]>=3.2.0           # psycopg3 — supersedes psycopg2
+SQLAlchemy>=2.0.36
+asyncpg>=0.30.0
+redis>=5.2.0
 
-# HTTP and API clients
-requests>=2.31.0
-httpx>=0.24.0
+# ---- Cloud SDKs (kept as extras-recommended) --------------------------------
+boto3>=1.36.0
+azure-identity>=1.19.0
+azure-storage-blob>=12.24.0
+google-cloud-storage>=2.19.0
 
-# Database connectors
-psycopg2-binary>=2.9.0  # PostgreSQL
-PyMySQL>=1.1.0          # MySQL
-sqlite3                 # SQLite (built-in)
+# ---- Container / orchestration ---------------------------------------------
+kubernetes>=31.0.0
+docker>=7.1.0
 
-# Cloud SDK dependencies
-boto3>=1.28.0           # AWS SDK
-azure-storage-blob>=12.17.0  # Azure SDK
-google-cloud-storage>=2.10.0  # Google Cloud SDK
+# ---- Observability ----------------------------------------------------------
+prometheus-client>=0.21.0
+opentelemetry-api>=1.29.0
+opentelemetry-sdk>=1.29.0
+opentelemetry-exporter-otlp>=1.29.0
+opentelemetry-instrumentation>=0.50b0
+structlog>=24.4.0
+loguru>=0.7.3
+rich>=13.9.0
 
-# Container and orchestration
-kubernetes>=27.2.0
-docker>=6.1.0
+# ---- LLM / agent orchestration (the real "Supreme" stack) ------------------
+langgraph>=0.4.0
+langchain>=0.3.10
+langchain-core>=0.3.20
+langchain-community>=0.3.10
+langchain-openai>=0.2.10
+langchain-anthropic>=0.3.0
+openai>=1.60.0
+anthropic>=0.40.0
 
-# Monitoring and observability
-prometheus-client>=0.17.0
-grafana-api>=1.0.3
+# ---- Model Context Protocol & Agent-to-Agent --------------------------------
+# MCP became the de-facto agent-tooling standard in 2025; A2A followed.
+mcp>=1.2.0
 
-# Message queues and streaming
-redis>=4.6.0
-pika>=1.3.0             # RabbitMQ
-kafka-python>=2.0.2     # Apache Kafka
+# ---- Vector / memory layer --------------------------------------------------
+pinecone-client>=5.0.0
+supabase>=2.10.0
+chromadb>=0.5.20
 
-# Data processing
-pandas>=2.0.0
-numpy>=1.24.0
-scipy>=1.11.0
+# ---- Message queues ---------------------------------------------------------
+aiokafka>=0.12.0
+pika>=1.3.2
 
-# Machine learning (for quantum and consciousness features)
-scikit-learn>=1.3.0
-tensorflow>=2.13.0
-torch>=2.0.0
+# ---- Data processing --------------------------------------------------------
+numpy>=2.1.0
+pandas>=2.2.3
+scipy>=1.14.0
+pyarrow>=18.0.0
 
-# Quantum computing simulation
-qiskit>=0.44.0
-cirq>=1.2.0
+# ---- Quantum computing (real libraries, current APIs) ----------------------
+# Qiskit 1.x dropped `qiskit.execute` and `Aer` top-level imports —
+# code must use qiskit_aer + transpile/run primitives.
+qiskit>=1.3.0,<2.0
+qiskit-aer>=0.15.0
+qiskit-ibm-runtime>=0.34.0
+cirq>=1.4.0
+pennylane>=0.39.0
 
-# Natural language processing (for consciousness features)
-nltk>=3.8.0
-spacy>=3.6.0
-transformers>=4.32.0
+# ---- ML (optional, install via [ml] extra in practice) ---------------------
+scikit-learn>=1.6.0
+# Heavy frameworks left to the [ml] extra to keep base install lean:
+#   tensorflow, torch, transformers
 
-# Configuration and environment
-python-dotenv>=1.0.0
-PyYAML>=6.0.0
-toml>=0.10.0
+# ---- API server -------------------------------------------------------------
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+starlette>=0.41.0
 
-# Logging and debugging
-loguru>=0.7.0
-rich>=13.5.0
+# ---- Workflow / graphs ------------------------------------------------------
+networkx>=3.4.0
 
-# Testing
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
-pytest-cov>=4.1.0
-pytest-mock>=3.11.0
+# ---- Caching ----------------------------------------------------------------
+cachetools>=5.5.0
 
-# Code quality
-black>=23.7.0
-flake8>=6.0.0
-mypy>=1.5.0
-isort>=5.12.0
+# ---- Config & env -----------------------------------------------------------
+python-dotenv>=1.0.1
 
-# Documentation
-sphinx>=7.1.0
-sphinx-rtd-theme>=1.3.0
+# ---- Validation utilities ---------------------------------------------------
+marshmallow>=3.23.0
+cerberus>=1.3.5
 
-# Performance monitoring
-psutil>=5.9.0
-memory-profiler>=0.61.0
+# ---- Performance / introspection -------------------------------------------
+psutil>=6.1.0
 
-# UUID and unique identifiers
-uuid>=1.30
+# ---- Testing ----------------------------------------------------------------
+pytest>=8.3.0
+pytest-asyncio>=0.25.0
+pytest-cov>=6.0.0
+pytest-mock>=3.14.0
 
-# Statistics and mathematics
-statistics  # built-in
-math        # built-in
-random      # built-in
-
-# Development and debugging
-ipython>=8.14.0
-jupyter>=1.0.0
-
-# API documentation
-fastapi>=0.103.0        # For future API endpoints
-uvicorn>=0.23.0         # ASGI server
-
-# Graph and workflow management
-networkx>=3.1.0         # For workflow graphs
-
-# Serialization formats
-avro>=1.11.0
-parquet>=1.3.1
-
-# Time series and analytics
-influxdb-client>=1.37.0
-
-# Caching
-cachetools>=5.3.0
-
-# Concurrency and parallelism
-concurrent.futures  # built-in
-multiprocessing     # built-in
-threading          # built-in
-
-# File and path handling
-pathlib    # built-in
-os         # built-in
-sys        # built-in
-
-# Error handling and validation
-cerberus>=1.3.4
-marshmallow>=3.20.0
-
-# Quantum-enhanced features (experimental)
-qiskit-aer>=0.12.0
-qiskit-ibmq-provider>=0.20.0
-
-# Consciousness simulation (experimental)
-neurosymbolic>=0.1.0
-cognitive-architectures>=0.2.0
-
-# Note: Some experimental packages may not be available in PyPI
-# They represent conceptual dependencies for quantum and consciousness features
-# In a real implementation, these would be custom modules or research libraries
+# ---- Dev tooling (kept here for convenience; can move to setup.py extras) --
+ruff>=0.8.0
+black>=24.10.0
+mypy>=1.13.0
